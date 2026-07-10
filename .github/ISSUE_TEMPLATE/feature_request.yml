@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an idea or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Check the roadmap in the [README](../blob/main/README.md#roadmap)
+        and [docs/REQUIREMENTS.md](../blob/main/docs/REQUIREMENTS.md) first — it may already be planned.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the use case or pain point, not just the solution.
+      placeholder: When I set up a new project I have to ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like Click to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds or other approaches you've thought about.
+    validations:
+      required: false
