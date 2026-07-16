@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Action, LaunchReport, Workspace } from "./types";
+import type { Action, ConfigStatus, LaunchReport, Workspace } from "./types";
 
 export const api = {
   listWorkspaces: () => invoke<Workspace[]>("list_workspaces"),
@@ -15,4 +15,5 @@ export const api = {
     invoke<LaunchReport>("launch_workspace_by_id", { id }),
   createDesktopShortcut: (id: string) =>
     invoke<string>("create_desktop_shortcut", { id }),
+  configStatus: () => invoke<ConfigStatus>("config_status"),
 };

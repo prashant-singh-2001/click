@@ -11,6 +11,23 @@ fn config_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
 }
 
 fn persist(app: &AppHandle, state: &State<AppState>) -> Result<(), String> {
+    // Never write over a config we failed to read but couldn't set aside —
+    // it may still be intact, and overwriting it would destroy the user's
+    // workspaces for good.
+    let blocked = state
+        .config_status
+        .lock()
+        .unwrap()
+        .save_block_reason()
+        .map(str::to_string);
+    if let Some(reason) = blocked {
+        return Err(format!(
+            "Click won't save because it couldn't read your existing config \
+             and won't risk overwriting it ({reason}). Move or fix that file, \
+             then restart Click."
+        ));
+    }
+
     {
         let file = state.file.lock().unwrap();
         let dir = config_dir(app)?;
@@ -19,6 +36,13 @@ fn persist(app: &AppHandle, state: &State<AppState>) -> Result<(), String> {
     crate::tray::rebuild(app);
     crate::hotkeys::register_all(app);
     Ok(())
+}
+
+/// Lets the UI warn the user when their config was quarantined or when
+/// saving is disabled (issue #1).
+#[tauri::command]
+pub fn config_status(state: State<AppState>) -> store::LoadStatus {
+    state.config_status.lock().unwrap().clone()
 }
 
 #[tauri::command]
