@@ -49,6 +49,12 @@ export interface LaunchReport {
   outcomes: ActionOutcome[];
 }
 
+// Mirrors `store::LoadStatus` in Rust — how the config loaded at startup.
+export type ConfigStatus =
+  | { kind: "ok" }
+  | { kind: "recovered"; backupPath: string; reason: string }
+  | { kind: "blocked"; reason: string };
+
 export function newWorkspace(): Workspace {
   return {
     id: crypto.randomUUID(),

@@ -10,10 +10,15 @@ mod vars;
 
 use model::WorkspaceFile;
 use std::sync::Mutex;
+use store::LoadStatus;
 use tauri::Manager;
 
 pub struct AppState {
     pub file: Mutex<WorkspaceFile>,
+    /// How the config loaded at startup. Gates saving when the on-disk file
+    /// couldn't be read and couldn't be safely set aside, so a config we
+    /// merely failed to parse is never overwritten with an empty one.
+    pub config_status: Mutex<LoadStatus>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -30,9 +35,10 @@ pub fn run() {
         .plugin(tauri_plugin_cli::init())
         .setup(|app| {
             let config_dir = app.path().app_config_dir()?;
-            let file = store::load(&config_dir).unwrap_or_default();
+            let loaded = store::load(&config_dir);
             app.manage(AppState {
-                file: Mutex::new(file),
+                file: Mutex::new(loaded.file),
+                config_status: Mutex::new(loaded.status),
             });
 
             hotkeys::init(app)?;
@@ -51,6 +57,7 @@ pub fn run() {
             commands::validate_action,
             commands::launch_workspace_by_id,
             commands::create_desktop_shortcut,
+            commands::config_status,
         ])
         .on_window_event(|window, event| {
             // Closing the main window hides it into the tray instead of
