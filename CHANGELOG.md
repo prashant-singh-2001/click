@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Click-to-capture hotkey input** — the global-hotkey field is now a capture widget
+  instead of free text: click it, press the combo, and it's translated to the
+  accelerator syntax automatically. ([#19])
+
+### Fixed
+
+- Hotkey registration failures are no longer silent. The editor now shows whether a
+  workspace's hotkey is active, invalid, already used by another workspace, or
+  conflicting with another app's binding — both live, while capturing a new combo,
+  and for the hotkey that's actually saved. ([#5])
+
 ## [0.1.0] — 2026-07-11
 
 Initial release. A Windows desktop app (Tauri v2 + React) that launches a whole
@@ -51,5 +64,7 @@ development environment from a single named workspace.
 - Action fields now serialize as camelCase (`delayAfterMs`); `rename_all` on the
   `Action` enum previously left inner fields snake_case, silently dropping the value.
 
-[Unreleased]: https://github.com/
-[0.1.0]: https://github.com/
+[Unreleased]: https://github.com/prashant-singh-2001/click/commits/main
+[0.1.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.1.0
+[#5]: https://github.com/prashant-singh-2001/click/issues/5
+[#19]: https://github.com/prashant-singh-2001/click/issues/19

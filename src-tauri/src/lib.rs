@@ -58,6 +58,10 @@ pub fn run() {
             commands::launch_workspace_by_id,
             commands::create_desktop_shortcut,
             commands::config_status,
+            commands::probe_hotkey,
+            commands::hotkey_status,
+            commands::suspend_hotkeys,
+            commands::resume_hotkeys,
         ])
         .on_window_event(|window, event| {
             // Closing the main window hides it into the tray instead of

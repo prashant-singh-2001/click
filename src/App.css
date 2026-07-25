@@ -172,6 +172,43 @@ textarea {
   opacity: 0.75;
 }
 
+.hotkey-input {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.hotkey-input button:not(.hotkey-clear) {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  min-width: 10rem;
+}
+
+.hotkey-capture-active {
+  border-color: #396cd8 !important;
+  box-shadow: 0 0 0 2px rgba(57, 108, 216, 0.3);
+}
+
+.hotkey-clear {
+  padding: 0.3em 0.6em;
+}
+
+.hotkey-status {
+  font-size: 0.85em;
+}
+
+.hotkey-status-ok {
+  color: #2a9d5c;
+}
+
+.hotkey-status-warn {
+  color: #d9a300;
+}
+
+.hotkey-status-error {
+  color: #c0392b;
+}
+
 .launch-progress {
   margin-top: 0.75rem;
   border-top: 1px solid rgba(0, 0, 0, 0.1);
