@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api";
 import { newAppAction, newUrlAction } from "../types";
-import type { LaunchReport, Workspace } from "../types";
+import type { HotkeyStatus, LaunchReport, Workspace } from "../types";
 import { ActionEditor } from "./ActionEditor";
+import { HotkeyInput } from "./HotkeyInput";
 import { LaunchProgress } from "./LaunchProgress";
 
 export function WorkspaceEditor({
@@ -20,6 +21,22 @@ export function WorkspaceEditor({
   const [report, setReport] = useState<LaunchReport | null>(null);
   const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [hotkeyStatus, setHotkeyStatus] = useState<HotkeyStatus | null>(null);
+
+  useEffect(() => {
+    // Runs once: the editor only ever hosts a single workspace for its
+    // whole lifetime (opening a different one goes through the list first).
+    api.hotkeyStatus(workspace.id).then(setHotkeyStatus);
+  }, []);
+
+  function handleHotkeyChange(next: string | null) {
+    setDraft({ ...draft, hotkey: next });
+    if (!next) {
+      setHotkeyStatus({ kind: "unset" });
+      return;
+    }
+    api.probeHotkey(next, draft.id).then(setHotkeyStatus);
+  }
 
   function updateAction(index: number, next: Workspace["actions"][number]) {
     const actions = [...draft.actions];
@@ -172,14 +189,12 @@ export function WorkspaceEditor({
           />
         </label>
         <div className="field-row">
-          <label>
-            Global hotkey (optional):
-            <input
-              value={draft.hotkey ?? ""}
-              onChange={(e) => setDraft({ ...draft, hotkey: e.currentTarget.value || null })}
-              placeholder="e.g. Ctrl+Alt+1"
-            />
-          </label>
+          <label>Global hotkey (optional):</label>
+          <HotkeyInput
+            value={draft.hotkey ?? null}
+            status={hotkeyStatus}
+            onCommit={handleHotkeyChange}
+          />
         </div>
       </section>
 
