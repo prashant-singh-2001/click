@@ -19,6 +19,7 @@ export function WorkspaceEditor({
   const [launching, setLaunching] = useState(false);
   const [report, setReport] = useState<LaunchReport | null>(null);
   const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   function updateAction(index: number, next: Workspace["actions"][number]) {
     const actions = [...draft.actions];
@@ -53,9 +54,12 @@ export function WorkspaceEditor({
 
   async function handleSave() {
     setSaving(true);
+    setActionError(null);
     try {
       await api.saveWorkspace(draft);
       onSaved();
+    } catch (err) {
+      setActionError(`Save failed: ${err}`);
     } finally {
       setSaving(false);
     }
@@ -75,9 +79,12 @@ export function WorkspaceEditor({
   async function handleLaunch() {
     setLaunching(true);
     setReport(null);
+    setActionError(null);
     try {
       const result = await api.launchWorkspace(draft.id);
       setReport(result);
+    } catch (err) {
+      setActionError(`Launch failed: ${err}`);
     } finally {
       setLaunching(false);
     }
@@ -191,6 +198,11 @@ export function WorkspaceEditor({
         </button>
       </div>
 
+      {actionError && (
+        <div className="banner banner-error" role="alert">
+          {actionError}
+        </div>
+      )}
       {shortcutMessage && <p className="shortcut-message">{shortcutMessage}</p>}
       {report && <LaunchProgress report={report} />}
     </div>
