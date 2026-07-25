@@ -34,7 +34,7 @@ Starting a dev session means opening the same pile of tools every single time: a
 - **Live launch progress** — see which actions started, were skipped, or failed, with specific error messages. One failing action never aborts the rest.
 - **The "one click", four ways:**
   - **System tray** menu — quick-launch any workspace without opening the main window.
-  - **Global hotkeys** — assign a shortcut like `Ctrl+Alt+1` per workspace.
+  - **Global hotkeys** — click the hotkey field and press a combo (e.g. `Ctrl+Alt+1`) to capture it, with live feedback if it's invalid or already taken.
   - **Desktop shortcuts** — generate a real `.lnk` that launches a workspace on double-click, even when the app isn't already open.
   - **CLI** — `click run --id <uuid>` for scripting and Start-menu use.
 - **Single instance** — a second launch forwards its command to the running app instead of starting a duplicate.
