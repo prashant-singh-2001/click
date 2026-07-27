@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Frontend test suite** — Vitest + React Testing Library, gated in CI. Includes
+  known-failing regression tests for two open bugs (variables-editor focus loss, #2;
+  editor Launch using the saved record instead of the current draft, #9) so a future
+  fix can't silently leave them broken. ([#14])
+
 ## [0.2.0] — 2026-07-26
 
 ### Added
@@ -70,4 +77,5 @@ development environment from a single named workspace.
 [0.2.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.2.0
 [0.1.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.1.0
 [#5]: https://github.com/prashant-singh-2001/click/issues/5
+[#14]: https://github.com/prashant-singh-2001/click/issues/14
 [#19]: https://github.com/prashant-singh-2001/click/issues/19
