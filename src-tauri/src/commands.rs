@@ -1,9 +1,11 @@
+use crate::hotkeys::HotkeyStatus;
 use crate::launch::{self, LaunchReport};
 use crate::model::{Action, Workspace};
 use crate::store;
 use crate::AppState;
 use std::path::Path;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use uuid::Uuid;
 
 fn config_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
@@ -194,4 +196,56 @@ pub fn create_desktop_shortcut(
         .ok_or_else(|| format!("workspace {id} not found"))?;
     crate::shortcut::create_desktop_shortcut(&app, &workspace)
         .map(|path| path.to_string_lossy().to_string())
+}
+
+/// Releases every hotkey Click currently holds with the OS. `RegisterHotKey`
+/// intercepts a bound combo system-wide — it never reaches any window as a
+/// normal keypress, not even Click's own — so without this, the capture
+/// widget could never actually receive a keystroke for a combo one of the
+/// user's own *other* workspaces already holds. Call before entering
+/// capture mode; pair with `resume_hotkeys` when capture ends.
+#[tauri::command]
+pub fn suspend_hotkeys(app: AppHandle) {
+    let _ = app.global_shortcut().unregister_all();
+}
+
+/// Re-registers every workspace's hotkey from the saved config, undoing
+/// `suspend_hotkeys`. Just `register_all` — already idempotent and safe to
+/// call unconditionally.
+#[tauri::command]
+pub fn resume_hotkeys(app: AppHandle) {
+    crate::hotkeys::register_all(&app);
+}
+
+/// Checks whether `accelerator` could be bound right now, without saving
+/// anything or disturbing an existing live binding. Used by the editor's
+/// hotkey capture widget for immediate feedback (issue #19); the check
+/// itself lives in `hotkeys::probe` (issue #5).
+#[tauri::command]
+pub fn probe_hotkey(
+    app: AppHandle,
+    accelerator: String,
+    workspace_id: Option<String>,
+) -> Result<HotkeyStatus, String> {
+    let for_workspace = workspace_id
+        .map(|id| Uuid::parse_str(&id).map_err(|e| e.to_string()))
+        .transpose()?;
+    Ok(crate::hotkeys::probe(&app, &accelerator, for_workspace))
+}
+
+/// The authoritative registration outcome from the last `register_all` pass
+/// (run at startup and after every save) for one workspace.
+#[tauri::command]
+pub fn hotkey_status(
+    state: State<crate::hotkeys::HotkeyState>,
+    id: String,
+) -> Result<HotkeyStatus, String> {
+    let uuid = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
+    Ok(state
+        .statuses
+        .lock()
+        .unwrap()
+        .get(&uuid)
+        .cloned()
+        .unwrap_or(HotkeyStatus::Unset))
 }

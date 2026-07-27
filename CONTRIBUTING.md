@@ -42,6 +42,7 @@ cargo test
 # Frontend (from the repo root)
 npm run build          # tsc + vite
 npx tsc --noEmit       # type-check only
+npm test               # vitest
 ```
 
 ## Project layout

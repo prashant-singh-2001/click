@@ -55,6 +55,15 @@ export type ConfigStatus =
   | { kind: "recovered"; backupPath: string; reason: string }
   | { kind: "blocked"; reason: string };
 
+// Mirrors `hotkeys::HotkeyStatus` in Rust — whether a workspace's global
+// hotkey is bound, and why not if it isn't.
+export type HotkeyStatus =
+  | { kind: "unset" }
+  | { kind: "registered" }
+  | { kind: "invalid"; reason: string }
+  | { kind: "duplicate"; workspaceName: string }
+  | { kind: "conflict"; reason: string };
+
 export function newWorkspace(): Workspace {
   return {
     id: crypto.randomUUID(),
