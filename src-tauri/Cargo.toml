@@ -1,6 +1,6 @@
 [package]
 name = "click"
-version = "0.2.0"
+version = "0.2.2"
 description = "One-click workspace launcher"
 authors = ["you"]
 edition = "2021"
