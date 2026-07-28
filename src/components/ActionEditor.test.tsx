@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { ActionEditor } from "./ActionEditor";
-import type { AppAction, UrlAction } from "../types";
+import type { AppAction, InstalledApp, UrlAction } from "../types";
 
 vi.mock("../api");
 
@@ -85,5 +86,76 @@ describe("ActionEditor", () => {
     expect(
       await screen.findByText(/path does not exist: C:\/missing\.exe/i),
     ).toBeInTheDocument();
+  });
+
+  const PICKED_APP: InstalledApp = {
+    name: "VS Code",
+    path: "C:/Program Files/Microsoft VS Code/Code.exe",
+  };
+
+  it("fills in path and label from the picker when the label is still the default", async () => {
+    const user = userEvent.setup();
+    mockedApi.listInstalledApps.mockResolvedValue([PICKED_APP]);
+    const onChange = vi.fn();
+
+    render(
+      <ActionEditor
+        action={makeAppAction({ label: "New app" })}
+        onChange={onChange}
+        onRemove={noop}
+        onMoveUp={noop}
+        onMoveDown={noop}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /choose app/i }));
+    await user.click(await screen.findByText("VS Code"));
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ path: PICKED_APP.path, label: "VS Code" }),
+    );
+  });
+
+  it("keeps a customized label when picking an app", async () => {
+    const user = userEvent.setup();
+    mockedApi.listInstalledApps.mockResolvedValue([PICKED_APP]);
+    const onChange = vi.fn();
+
+    render(
+      <ActionEditor
+        action={makeAppAction({ label: "My editor" })}
+        onChange={onChange}
+        onRemove={noop}
+        onMoveUp={noop}
+        onMoveDown={noop}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /choose app/i }));
+    await user.click(await screen.findByText("VS Code"));
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ path: PICKED_APP.path, label: "My editor" }),
+    );
+  });
+
+  it("closes the picker after selecting an app", async () => {
+    const user = userEvent.setup();
+    mockedApi.listInstalledApps.mockResolvedValue([PICKED_APP]);
+
+    render(
+      <ActionEditor
+        action={makeAppAction()}
+        onChange={vi.fn()}
+        onRemove={noop}
+        onMoveUp={noop}
+        onMoveDown={noop}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /choose app/i }));
+    await user.click(await screen.findByText("VS Code"));
+
+    expect(screen.queryByPlaceholderText(/search installed apps/i)).not.toBeInTheDocument();
   });
 });

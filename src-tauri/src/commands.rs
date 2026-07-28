@@ -1,4 +1,5 @@
 use crate::hotkeys::HotkeyStatus;
+use crate::installed_apps::{self, InstalledApp};
 use crate::launch::{self, LaunchReport};
 use crate::model::{Action, Workspace};
 use crate::store;
@@ -248,4 +249,15 @@ pub fn hotkey_status(
         .get(&uuid)
         .cloned()
         .unwrap_or(HotkeyStatus::Unset))
+}
+
+/// Scans Start Menu shortcuts for the app picker (issue #32). Walking both
+/// trees and resolving every `.lnk` via COM is slow enough to belong off the
+/// async runtime — matches the "no blocking work on the async runtime" rule
+/// from issue #3.
+#[tauri::command]
+pub async fn list_installed_apps(app: AppHandle, refresh: bool) -> Vec<InstalledApp> {
+    tauri::async_runtime::spawn_blocking(move || installed_apps::list(&app, refresh))
+        .await
+        .unwrap_or_default()
 }

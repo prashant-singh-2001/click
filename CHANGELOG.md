@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   known-failing regression tests for two open bugs (variables-editor focus loss, #2;
   editor Launch using the saved record instead of the current draft, #9) so a future
   fix can't silently leave them broken. ([#14])
+- **App picker** — adding an app action now offers **Choose app…** alongside the
+  existing path field and file-browse dialog: a searchable list of installed
+  applications (scanned from the Start Menu), so adding VS Code or Docker no longer
+  means typing or hunting for its install path. ([#32])
 
 ## [0.2.0] — 2026-07-26
 
@@ -79,3 +83,4 @@ development environment from a single named workspace.
 [#5]: https://github.com/prashant-singh-2001/click/issues/5
 [#14]: https://github.com/prashant-singh-2001/click/issues/14
 [#19]: https://github.com/prashant-singh-2001/click/issues/19
+[#32]: https://github.com/prashant-singh-2001/click/issues/32
