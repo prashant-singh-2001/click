@@ -16,4 +16,5 @@ export function resetApiMocks() {
   mockedApi.suspendHotkeys.mockResolvedValue(undefined);
   mockedApi.resumeHotkeys.mockResolvedValue(undefined);
   mockedApi.validateAction.mockResolvedValue(null);
+  mockedApi.listInstalledApps.mockResolvedValue([]);
 }

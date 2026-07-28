@@ -1,5 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Action, ConfigStatus, HotkeyStatus, LaunchReport, Workspace } from "./types";
+import type {
+  Action,
+  ConfigStatus,
+  HotkeyStatus,
+  InstalledApp,
+  LaunchReport,
+  Workspace,
+} from "./types";
 
 export const api = {
   listWorkspaces: () => invoke<Workspace[]>("list_workspaces"),
@@ -21,4 +28,6 @@ export const api = {
   hotkeyStatus: (id: string) => invoke<HotkeyStatus>("hotkey_status", { id }),
   suspendHotkeys: () => invoke<void>("suspend_hotkeys"),
   resumeHotkeys: () => invoke<void>("resume_hotkeys"),
+  listInstalledApps: (refresh: boolean) =>
+    invoke<InstalledApp[]>("list_installed_apps", { refresh }),
 };

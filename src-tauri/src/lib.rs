@@ -1,6 +1,7 @@
 mod cli;
 mod commands;
 mod hotkeys;
+mod installed_apps;
 mod launch;
 mod model;
 mod shortcut;
@@ -43,6 +44,7 @@ pub fn run() {
 
             hotkeys::init(app)?;
             hotkeys::register_all(&app.handle().clone());
+            installed_apps::init(app);
             tray::build(app)?;
             cli::handle(&app.handle().clone(), None);
 
@@ -62,6 +64,7 @@ pub fn run() {
             commands::hotkey_status,
             commands::suspend_hotkeys,
             commands::resume_hotkeys,
+            commands::list_installed_apps,
         ])
         .on_window_event(|window, event| {
             // Closing the main window hides it into the tray instead of

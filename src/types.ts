@@ -64,6 +64,13 @@ export type HotkeyStatus =
   | { kind: "duplicate"; workspaceName: string }
   | { kind: "conflict"; reason: string };
 
+// Mirrors `installed_apps::InstalledApp` in Rust — one Start Menu app
+// resolved to a real .exe path, for the app picker (issue #32).
+export interface InstalledApp {
+  name: string;
+  path: string;
+}
+
 export function newWorkspace(): Workspace {
   return {
     id: crypto.randomUUID(),
@@ -80,11 +87,16 @@ export function newWorkspace(): Workspace {
   };
 }
 
+// The sentinel default label — used to decide whether picking an app from
+// the installed-apps picker (issue #32) should also fill in the label, or
+// leave a name the user already typed alone.
+export const DEFAULT_APP_LABEL = "New app";
+
 export function newAppAction(): AppAction {
   return {
     type: "app",
     id: crypto.randomUUID(),
-    label: "New app",
+    label: DEFAULT_APP_LABEL,
     path: "",
     args: [],
     cwd: null,

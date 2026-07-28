@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
-import type { Action } from "../types";
+import type { Action, InstalledApp } from "../types";
+import { DEFAULT_APP_LABEL } from "../types";
+import { AppPicker } from "./AppPicker";
 
 export function ActionEditor({
   action,
@@ -17,10 +19,20 @@ export function ActionEditor({
   onMoveDown: () => void;
 }) {
   const [warning, setWarning] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     api.validateAction(action).then(setWarning);
   }, [action]);
+
+  function handlePickApp(app: InstalledApp) {
+    setPickerOpen(false);
+    if (action.type !== "app") return;
+    // Don't clobber a label the user already customized — only fill it in
+    // while it's still the factory default.
+    const label = action.label === DEFAULT_APP_LABEL ? app.name : action.label;
+    onChange({ ...action, path: app.path, label });
+  }
 
   return (
     <div className={`action-editor ${action.enabled ? "" : "action-disabled"}`}>
@@ -62,6 +74,9 @@ export function ActionEditor({
               }}
             >
               Browse…
+            </button>
+            <button type="button" onClick={() => setPickerOpen(true)}>
+              Choose app…
             </button>
           </div>
           <input
@@ -108,6 +123,10 @@ export function ActionEditor({
       </div>
 
       {warning && <div className="action-warning">⚠ {warning}</div>}
+
+      {pickerOpen && (
+        <AppPicker onSelect={handlePickApp} onClose={() => setPickerOpen(false)} />
+      )}
     </div>
   );
 }
