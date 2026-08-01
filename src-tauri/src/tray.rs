@@ -74,7 +74,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
         other if other.starts_with("launch:") => {
             let workspace_id = other.trim_start_matches("launch:").to_string();
             let app = app.clone();
-            tauri::async_runtime::spawn(async move {
+            tauri::async_runtime::spawn_blocking(move || {
                 let _ = crate::commands::launch_by_id(&app, &workspace_id);
             });
         }

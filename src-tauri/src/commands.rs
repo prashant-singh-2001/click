@@ -151,9 +151,14 @@ pub fn validate_action(action: Action) -> Option<String> {
     }
 }
 
+/// Runs the launch on a blocking thread — `launch::launch_workspace` sleeps
+/// between actions with `std::thread::sleep`, and doing that on an async
+/// worker thread pins it for the sum of every delay (issue #3).
 #[tauri::command]
 pub async fn launch_workspace_by_id(app: AppHandle, id: String) -> Result<LaunchReport, String> {
-    launch_by_id(&app, &id)
+    tauri::async_runtime::spawn_blocking(move || launch_by_id(&app, &id))
+        .await
+        .map_err(|e| format!("launch task failed: {e}"))?
 }
 
 /// Shared by the `launch_workspace_by_id` command, the tray menu, global
