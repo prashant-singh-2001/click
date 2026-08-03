@@ -1,0 +1,66 @@
+name: Smoke
+
+# Builds the real installers and boot-tests the installed app end-to-end
+# (issue #24). ci.yml never produces or runs the packaged bundle — this is
+# the only workflow that does, so it runs nightly/on-demand/on-main rather
+# than gating every PR.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-smoke-test:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Clean previous bundle output
+        # Guarantees the installer glob in smoke-test.ps1 can only ever see
+        # artifacts from this run, regardless of what Rust build caching
+        # left behind.
+        shell: pwsh
+        run: Remove-Item -Recurse -Force -ErrorAction SilentlyContinue src-tauri/target/release/bundle
+
+      - name: Build installers
+        run: npm run tauri build
+
+      - name: Boot-smoke-test the installed app
+        shell: pwsh
+        run: ./scripts/smoke-test.ps1
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-diagnostics
+          path: |
+            C:\click-smoke\*.log
+            src-tauri/target/release/bundle/**
+          if-no-files-found: ignore
+          retention-days: 7
