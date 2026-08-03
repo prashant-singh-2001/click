@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Launching a workspace no longer blocks the app.** Every launch trigger (the
+  Launch button, tray menu, global hotkeys, and `click run`) now runs on a
+  dedicated blocking thread instead of the async runtime, so the UI, tray, and
+  hotkeys all stay responsive for the full duration of a multi-action launch
+  with delays between actions. Also: the delay after the last action in a
+  workspace is no longer applied, so a launch returns immediately once its
+  final action starts instead of waiting out one more unnecessary delay.
+  ([#3])
+
 ## [0.2.2] — 2026-07-28
 
 ### Added
@@ -83,6 +94,7 @@ development environment from a single named workspace.
 [0.2.2]: https://github.com/prashant-singh-2001/click/releases/tag/v0.2.2
 [0.2.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.2.0
 [0.1.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.1.0
+[#3]: https://github.com/prashant-singh-2001/click/issues/3
 [#5]: https://github.com/prashant-singh-2001/click/issues/5
 [#14]: https://github.com/prashant-singh-2001/click/issues/14
 [#19]: https://github.com/prashant-singh-2001/click/issues/19

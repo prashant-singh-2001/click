@@ -62,7 +62,7 @@ pub fn init(app: &tauri::App) -> tauri::Result<()> {
 
                 if let Some(id) = workspace_id {
                     let app = app.clone();
-                    tauri::async_runtime::spawn(async move {
+                    tauri::async_runtime::spawn_blocking(move || {
                         let _ = crate::commands::launch_by_id(&app, &id.to_string());
                     });
                 }

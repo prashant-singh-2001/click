@@ -35,7 +35,7 @@ fn try_launch(app: &AppHandle, matches: &Matches) -> bool {
 
     let app = app.clone();
     let id = id.to_string();
-    tauri::async_runtime::spawn(async move {
+    tauri::async_runtime::spawn_blocking(move || {
         let _ = crate::commands::launch_by_id(&app, &id);
     });
     true

@@ -46,7 +46,11 @@ pub fn launch_workspace<F: FnMut(&ActionOutcome)>(
 ) -> LaunchReport {
     let mut outcomes = Vec::with_capacity(workspace.actions.len());
 
-    for action in &workspace.actions {
+    // The action whose delay would actually be observed — a trailing run of
+    // disabled actions must not force a wasted sleep before returning.
+    let last_active = workspace.actions.iter().rposition(|a| a.enabled());
+
+    for (index, action) in workspace.actions.iter().enumerate() {
         let outcome = if !action.enabled() {
             ActionOutcome {
                 action_id: action.id().to_string(),
@@ -59,19 +63,41 @@ pub fn launch_workspace<F: FnMut(&ActionOutcome)>(
         };
 
         on_outcome(&outcome);
-        outcomes.push(outcome.clone());
 
-        if !matches!(outcome.status, ActionStatus::Skipped) {
-            let delay = action
-                .delay_after_ms()
-                .unwrap_or(workspace.default_delay_ms);
-            if delay > 0 {
-                std::thread::sleep(Duration::from_millis(delay));
-            }
+        let is_last = last_active == Some(index);
+        if let Some(delay) = delay_after(
+            outcome.status,
+            action.delay_after_ms(),
+            workspace.default_delay_ms,
+            is_last,
+        ) {
+            std::thread::sleep(delay);
         }
+
+        outcomes.push(outcome);
     }
 
     LaunchReport { outcomes }
+}
+
+/// How long to pause after an action, if at all. Pure so the policy is
+/// unit-testable without an `AppHandle`. A skipped action never delays —
+/// nothing was started to space out — and neither does the last action to
+/// actually run, since nothing follows it and returning sooner is strictly
+/// better.
+fn delay_after(
+    status: ActionStatus,
+    delay_after_ms: Option<u64>,
+    default_delay_ms: u64,
+    is_last: bool,
+) -> Option<Duration> {
+    if matches!(status, ActionStatus::Skipped) || is_last {
+        return None;
+    }
+    match delay_after_ms.unwrap_or(default_delay_ms) {
+        0 => None,
+        ms => Some(Duration::from_millis(ms)),
+    }
 }
 
 fn run_action(app: &AppHandle, action: &Action, workspace: &Workspace) -> ActionOutcome {
@@ -161,4 +187,52 @@ fn run_url(
     app.opener()
         .open_url(&resolved, None::<&str>)
         .map_err(|e| format!("failed to open '{}': {}", resolved, e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn skipped_action_never_delays() {
+        assert_eq!(delay_after(ActionStatus::Skipped, None, 300, false), None);
+        assert_eq!(
+            delay_after(ActionStatus::Skipped, Some(500), 300, false),
+            None
+        );
+    }
+
+    #[test]
+    fn last_action_never_delays() {
+        assert_eq!(
+            delay_after(ActionStatus::Started, Some(500), 300, true),
+            None
+        );
+        assert_eq!(delay_after(ActionStatus::Failed, None, 300, true), None);
+    }
+
+    #[test]
+    fn per_action_override_wins_over_default() {
+        assert_eq!(
+            delay_after(ActionStatus::Started, Some(500), 300, false),
+            Some(Duration::from_millis(500))
+        );
+    }
+
+    #[test]
+    fn falls_back_to_workspace_default() {
+        assert_eq!(
+            delay_after(ActionStatus::Started, None, 300, false),
+            Some(Duration::from_millis(300))
+        );
+    }
+
+    #[test]
+    fn explicit_zero_delay_is_none() {
+        assert_eq!(
+            delay_after(ActionStatus::Started, Some(0), 300, false),
+            None
+        );
+        assert_eq!(delay_after(ActionStatus::Failed, None, 0, false), None);
+    }
 }
