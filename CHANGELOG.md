@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Icon, color, and tags are now editable**, and workspaces can be searched by name or
+  tag. The editor gets an Appearance section (an emoji icon picker, a color swatch, and
+  tag chips); the workspace list shows the icon, a color accent, and tag chips on each
+  card, plus a search box that filters by name or tag. These fields were persisted since
+  v0.1.0 but had no UI. ([#23])
+
 ### Fixed
 
 - **Launching a workspace no longer blocks the app.** Every launch trigger (the
@@ -95,6 +103,7 @@ development environment from a single named workspace.
 [0.2.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.2.0
 [0.1.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.1.0
 [#3]: https://github.com/prashant-singh-2001/click/issues/3
+[#23]: https://github.com/prashant-singh-2001/click/issues/23
 [#5]: https://github.com/prashant-singh-2001/click/issues/5
 [#14]: https://github.com/prashant-singh-2001/click/issues/14
 [#19]: https://github.com/prashant-singh-2001/click/issues/19

@@ -95,4 +95,73 @@ describe("WorkspaceEditor", () => {
       "Launch failed: workspace abc123 not found",
     );
   });
+
+  it("adds a tag and includes it in the saved workspace", async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceEditor workspace={makeWorkspace()} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByPlaceholderText(/add a tag/i), "backend");
+    await user.click(screen.getByRole("button", { name: /add tag/i }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(mockedApi.saveWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ tags: ["backend"] }),
+    );
+  });
+
+  it("rejects a blank tag", async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceEditor workspace={makeWorkspace()} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByPlaceholderText(/add a tag/i), "   ");
+    await user.click(screen.getByRole("button", { name: /add tag/i }));
+
+    expect(screen.queryByRole("button", { name: /remove tag/i })).not.toBeInTheDocument();
+  });
+
+  it("rejects a duplicate tag (case-insensitive)", async () => {
+    const user = userEvent.setup();
+    const workspace = makeWorkspace({ tags: ["Backend"] });
+    render(<WorkspaceEditor workspace={workspace} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByPlaceholderText(/add a tag/i), "backend");
+    await user.click(screen.getByRole("button", { name: /add tag/i }));
+
+    expect(screen.getAllByText("Backend")).toHaveLength(1);
+  });
+
+  it("removes a tag", async () => {
+    const user = userEvent.setup();
+    const workspace = makeWorkspace({ tags: ["backend"] });
+    render(<WorkspaceEditor workspace={workspace} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /remove tag backend/i }));
+
+    expect(screen.queryByText("backend")).not.toBeInTheDocument();
+  });
+
+  it("includes the picked icon and color in the saved workspace", async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceEditor workspace={makeWorkspace()} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /use 🐳 as icon/i }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(mockedApi.saveWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ icon: "🐳" }),
+    );
+  });
+
+  it("clears the color back to null", async () => {
+    const user = userEvent.setup();
+    const workspace = makeWorkspace({ color: "#4f46e5" });
+    render(<WorkspaceEditor workspace={workspace} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /no color/i }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(mockedApi.saveWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ color: null }),
+    );
+  });
 });

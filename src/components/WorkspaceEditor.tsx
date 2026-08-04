@@ -4,7 +4,9 @@ import { newAppAction, newUrlAction } from "../types";
 import type { HotkeyStatus, LaunchReport, Workspace } from "../types";
 import { ActionEditor } from "./ActionEditor";
 import { HotkeyInput } from "./HotkeyInput";
+import { IconPicker } from "./IconPicker";
 import { LaunchProgress } from "./LaunchProgress";
+import { TagEditor } from "./TagEditor";
 
 export function WorkspaceEditor({
   workspace,
@@ -123,6 +125,37 @@ export function WorkspaceEditor({
         placeholder="Description (optional)"
         rows={2}
       />
+
+      <section>
+        <h3>Appearance</h3>
+        <div className="field-row">
+          <label>Icon:</label>
+          <IconPicker
+            value={draft.icon ?? null}
+            onChange={(icon) => setDraft({ ...draft, icon })}
+          />
+        </div>
+        <div className="field-row">
+          <label className="color-picker-label">
+            Color:
+            <input
+              type="color"
+              value={draft.color ?? "#000000"}
+              onChange={(e) => setDraft({ ...draft, color: e.currentTarget.value })}
+              aria-label="Workspace color"
+            />
+          </label>
+          {draft.color && (
+            <button type="button" onClick={() => setDraft({ ...draft, color: null })}>
+              No color
+            </button>
+          )}
+        </div>
+        <div>
+          <label>Tags:</label>
+          <TagEditor value={draft.tags} onChange={(tags) => setDraft({ ...draft, tags })} />
+        </div>
+      </section>
 
       <section>
         <h3>Variables</h3>
