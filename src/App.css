@@ -286,6 +286,79 @@ textarea {
   word-break: break-all;
 }
 
+.icon-picker-current {
+  font-size: 1.4em;
+}
+
+.icon-picker-input {
+  width: 4rem;
+  text-align: center;
+}
+
+.icon-picker-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+.icon-picker-option {
+  padding: 0.3em 0.5em;
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+.icon-picker-option[aria-pressed="true"] {
+  border-color: #396cd8;
+  box-shadow: 0 0 0 2px rgba(57, 108, 216, 0.3);
+}
+
+.color-picker-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.color-picker-label input[type="color"] {
+  padding: 0;
+  width: 2.4rem;
+  height: 2rem;
+}
+
+.tag-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.3rem 0;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  padding: 0.15em 0.7em;
+  font-size: 0.85em;
+  background-color: rgba(57, 108, 216, 0.12);
+  color: #2952a3;
+}
+
+.tag-chip-remove {
+  border: none;
+  box-shadow: none;
+  background: none;
+  padding: 0;
+  font-size: 0.9em;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.tag-chip-remove:hover {
+  opacity: 1;
+  border-color: transparent;
+}
+
 @media (prefers-color-scheme: dark) {
   .modal {
     background-color: #2f2f2f;
@@ -317,5 +390,10 @@ textarea {
 
   .action-type-badge {
     color: rgba(255, 255, 255, 0.5);
+  }
+
+  .tag-chip {
+    background-color: rgba(120, 158, 236, 0.18);
+    color: #a9c4f5;
   }
 }
