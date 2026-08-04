@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-08-04
+
 ### Added
 
 - **Icon, color, and tags are now editable**, and workspaces can be searched by name or
@@ -99,6 +101,7 @@ development environment from a single named workspace.
   `Action` enum previously left inner fields snake_case, silently dropping the value.
 
 [Unreleased]: https://github.com/prashant-singh-2001/click/commits/main
+[0.2.3]: https://github.com/prashant-singh-2001/click/releases/tag/v0.2.3
 [0.2.2]: https://github.com/prashant-singh-2001/click/releases/tag/v0.2.2
 [0.2.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.2.0
 [0.1.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.1.0
