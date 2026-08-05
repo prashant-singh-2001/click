@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The launch engine now has unit test coverage.** `launch.rs` is split into a pure
+  planning step (variable resolution and `.cmd`/`.bat` routing, with no `AppHandle`) and a
+  pure loop driver (skip-disabled, continue-on-failure, delay sequencing), with the actual
+  process spawn / URL open reduced to a thin executor. No behavior change — this closes
+  the coverage gap on load-bearing invariants (NFR-3, `.cmd`/`.bat` routing) that
+  previously had no tests. ([#7])
+
 ## [0.2.3] — 2026-08-04
 
 ### Added
@@ -106,6 +115,7 @@ development environment from a single named workspace.
 [0.2.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.2.0
 [0.1.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.1.0
 [#3]: https://github.com/prashant-singh-2001/click/issues/3
+[#7]: https://github.com/prashant-singh-2001/click/issues/7
 [#23]: https://github.com/prashant-singh-2001/click/issues/23
 [#5]: https://github.com/prashant-singh-2001/click/issues/5
 [#14]: https://github.com/prashant-singh-2001/click/issues/14
