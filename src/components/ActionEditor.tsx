@@ -22,7 +22,7 @@ export function ActionEditor({
   const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
-    api.validateAction(action).then(setWarning);
+    api.validateAction(action).then(setWarning).catch(console.error);
   }, [action]);
 
   function handlePickApp(app: InstalledApp) {

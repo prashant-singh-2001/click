@@ -18,6 +18,7 @@ npm run tauri build           # NSIS .exe + .msi under src-tauri/target/release/
 # Frontend
 npm run build                 # tsc && vite build
 npx tsc --noEmit              # type-check only
+npm run lint                  # eslint . (type-aware; see eslint.config.js)
 npm test                      # vitest run
 npx vitest run src/components/ActionEditor.test.tsx    # one file
 npx vitest run -t "keeps focus"                        # one test by name
@@ -29,7 +30,7 @@ cargo test
 cargo test store::tests::round_trips_workspaces        # one test
 ```
 
-CI (`.github/workflows/ci.yml`, windows-latest) runs exactly: `npm run build`, `npm test`, `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`. All five must pass.
+CI (`.github/workflows/ci.yml`, windows-latest) runs exactly: `npm run lint`, `npm run build`, `npm test`, `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`. All six must pass.
 
 `.github/workflows/smoke.yml` is separate and not a PR gate — nightly, on `workflow_dispatch`, and on pushes to `main`. It runs `npm run tauri build`, then `scripts/smoke-test.ps1`, which silent-installs the NSIS bundle and runs `click.exe run --id <uuid>` against a seeded throwaway workspace to prove the packaged app actually boots and launches (issue #24) — none of the `ci.yml` gates ever call `tauri::Builder::run`.
 

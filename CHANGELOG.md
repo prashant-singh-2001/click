@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   process spawn / URL open reduced to a thin executor. No behavior change — this closes
   the coverage gap on load-bearing invariants (NFR-3, `.cmd`/`.bat` routing) that
   previously had no tests. ([#7])
+- **The frontend is now linted** (type-aware ESLint, gated in CI alongside `cargo fmt` /
+  `clippy`). Fixing what it found turned up a handful of `.then()` chains whose rejection
+  went to an unhandled-promise-rejection warning instead of anywhere useful — those now
+  log to the console explicitly. No user-visible behavior change. ([#13])
 
 ## [0.2.3] — 2026-08-04
 
@@ -116,6 +120,7 @@ development environment from a single named workspace.
 [0.1.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.1.0
 [#3]: https://github.com/prashant-singh-2001/click/issues/3
 [#7]: https://github.com/prashant-singh-2001/click/issues/7
+[#13]: https://github.com/prashant-singh-2001/click/issues/13
 [#23]: https://github.com/prashant-singh-2001/click/issues/23
 [#5]: https://github.com/prashant-singh-2001/click/issues/5
 [#14]: https://github.com/prashant-singh-2001/click/issues/14
