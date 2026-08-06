@@ -19,8 +19,8 @@ function App() {
   }
 
   useEffect(() => {
-    refresh();
-    api.configStatus().then(setConfigStatus);
+    refresh().catch(console.error);
+    api.configStatus().then(setConfigStatus).catch(console.error);
   }, []);
 
   return (

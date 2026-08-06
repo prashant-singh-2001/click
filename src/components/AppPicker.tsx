@@ -14,7 +14,7 @@ export function AppPicker({
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    api.listInstalledApps(false).then(setApps);
+    api.listInstalledApps(false).then(setApps).catch(console.error);
   }, []);
 
   const filtered = useMemo(() => {

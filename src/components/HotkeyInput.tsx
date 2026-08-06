@@ -101,20 +101,20 @@ export function HotkeyInput({
   // siblings already holds.
   useEffect(() => {
     return () => {
-      if (capturing) api.resumeHotkeys();
+      if (capturing) void api.resumeHotkeys();
     };
   }, [capturing]);
 
   function enterCapture() {
     setCapturing(true);
     setNeedsModifier(false);
-    api.suspendHotkeys();
+    void api.suspendHotkeys();
   }
 
   function endCapture() {
     setCapturing(false);
     setNeedsModifier(false);
-    api.resumeHotkeys();
+    void api.resumeHotkeys();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLButtonElement>) {

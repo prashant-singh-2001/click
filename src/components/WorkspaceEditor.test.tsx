@@ -65,8 +65,13 @@ describe("WorkspaceEditor", () => {
 
     await user.click(screen.getByRole("button", { name: /^launch$/i }));
 
+    // launchWorkspace's real signature is (id: string) — this asserts the
+    // desired future contract (the whole draft), which is why the object
+    // literal below has no type to check against yet and needs the
+    // suppression. That mismatch is the point of this it.fails (see above).
     expect(mockedApi.launchWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         actions: expect.arrayContaining([
           expect.objectContaining({ url: "http://localhost:9999" }),
         ]),

@@ -28,8 +28,8 @@ export function WorkspaceEditor({
   useEffect(() => {
     // Runs once: the editor only ever hosts a single workspace for its
     // whole lifetime (opening a different one goes through the list first).
-    api.hotkeyStatus(workspace.id).then(setHotkeyStatus);
-  }, []);
+    api.hotkeyStatus(workspace.id).then(setHotkeyStatus).catch(console.error);
+  }, [workspace.id]);
 
   function handleHotkeyChange(next: string | null) {
     setDraft({ ...draft, hotkey: next });
@@ -37,7 +37,7 @@ export function WorkspaceEditor({
       setHotkeyStatus({ kind: "unset" });
       return;
     }
-    api.probeHotkey(next, draft.id).then(setHotkeyStatus);
+    api.probeHotkey(next, draft.id).then(setHotkeyStatus).catch(console.error);
   }
 
   function updateAction(index: number, next: Workspace["actions"][number]) {
@@ -78,7 +78,7 @@ export function WorkspaceEditor({
       await api.saveWorkspace(draft);
       onSaved();
     } catch (err) {
-      setActionError(`Save failed: ${err}`);
+      setActionError(`Save failed: ${String(err)}`);
     } finally {
       setSaving(false);
     }
@@ -91,7 +91,7 @@ export function WorkspaceEditor({
       const path = await api.createDesktopShortcut(draft.id);
       setShortcutMessage(`Created: ${path}`);
     } catch (err) {
-      setShortcutMessage(`Failed: ${err}`);
+      setShortcutMessage(`Failed: ${String(err)}`);
     }
   }
 
@@ -103,7 +103,7 @@ export function WorkspaceEditor({
       const result = await api.launchWorkspace(draft.id);
       setReport(result);
     } catch (err) {
-      setActionError(`Launch failed: ${err}`);
+      setActionError(`Launch failed: ${String(err)}`);
     } finally {
       setLaunching(false);
     }
