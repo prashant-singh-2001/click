@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   went to an unhandled-promise-rejection warning instead of anywhere useful — those now
   log to the console explicitly. No user-visible behavior change. ([#13])
 
+### Security
+
+- **The webview now runs under a Content-Security-Policy.** It was disabled outright
+  (`"csp": null`); it is now `default-src 'self'`, with the Tauri IPC endpoint allowed
+  through `connect-src` and `object-src` / `base-uri` / `frame-ancestors` / `form-action`
+  locked down. The app loads no remote resources and executes no inline or dynamic script,
+  so nothing changes in use — this is defense-in-depth, so that a workspace name, tag, or
+  path that ever reached the DOM as markup couldn't pull in outside code. ([#18])
+
 ## [0.2.3] — 2026-08-04
 
 ### Added
@@ -121,6 +130,7 @@ development environment from a single named workspace.
 [#3]: https://github.com/prashant-singh-2001/click/issues/3
 [#7]: https://github.com/prashant-singh-2001/click/issues/7
 [#13]: https://github.com/prashant-singh-2001/click/issues/13
+[#18]: https://github.com/prashant-singh-2001/click/issues/18
 [#23]: https://github.com/prashant-singh-2001/click/issues/23
 [#5]: https://github.com/prashant-singh-2001/click/issues/5
 [#14]: https://github.com/prashant-singh-2001/click/issues/14

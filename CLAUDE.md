@@ -56,6 +56,7 @@ These encode fixed bugs — breaking one silently regresses real data loss or cr
 - **`.cmd`/`.bat` targets route through `cmd /C`** (`Command::new` can't spawn them), and every spawn sets `CREATE_NO_WINDOW` so there's no console flash.
 - **Hotkey capture must suspend registrations first.** Windows `RegisterHotKey` swallows a bound combo system-wide, including from Click's own window, so the capture widget calls `suspend_hotkeys` → capture → `resume_hotkeys`. `hotkeys::register_all` re-registers from disk after every save and records a per-workspace `HotkeyStatus` the editor reads back; one bad combo must not take down the others.
 - **Tray and hotkeys are rebuilt on every config change** — that happens inside `commands::persist`, so new mutating commands should call it rather than saving directly.
+- **The webview runs under a strict CSP** (`app.security.csp` in `tauri.conf.json`, issue #18). `connect-src` must keep `http://ipc.localhost` — that is the URL Tauri's IPC `fetch` actually targets on Windows, so dropping it makes every `invoke` fail and bricks the whole UI. **`npm run tauri dev` does not enforce the CSP**: the webview loads `devUrl` (Vite) directly, so Tauri never serves the document and never sets the header. Only a bundled build applies it — a dev-mode pass proves nothing. Anything new that loads a remote resource, adds an inline `<style>`/`<script>`, or uses `convertFileSrc` needs a matching directive.
 
 ## Frontend tests
 

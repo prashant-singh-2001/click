@@ -78,3 +78,45 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+#[cfg(test)]
+mod tests {
+    /// Pins the webview's Content-Security-Policy (issue #18).
+    ///
+    /// This needs a test because breaking it is invisible everywhere else:
+    /// `tauri dev` points the webview straight at the Vite dev server, so
+    /// Tauri never serves the document and never sets the header — the CSP
+    /// only ever applies to a bundled build. Drop `http://ipc.localhost` from
+    /// `connect-src` and every `invoke` fails, i.e. a completely dead UI in
+    /// the shipped installer, while `npm run tauri dev`, the frontend suite,
+    /// and the rest of CI all stay green.
+    #[test]
+    fn csp_is_set_and_allows_tauri_ipc() {
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("tauri.conf.json should parse");
+
+        let csp = config["app"]["security"]["csp"]
+            .as_str()
+            .expect("app.security.csp must be a string, not null (issue #18)");
+
+        assert!(
+            csp.contains("default-src 'self'"),
+            "CSP must lock the default source down to 'self', got: {csp}"
+        );
+
+        // Tauri's IPC is a `fetch` to http://ipc.localhost/<cmd> on Windows
+        // (see `convertFileSrc` in tauri's injected core.js). That is a
+        // different origin from the app's own http://tauri.localhost, so
+        // `default-src 'self'` alone blocks it — it needs its own connect-src.
+        let connect_src = csp
+            .split(';')
+            .map(str::trim)
+            .find(|directive| directive.starts_with("connect-src"))
+            .expect("CSP needs an explicit connect-src for the IPC endpoint");
+
+        assert!(
+            connect_src.contains("http://ipc.localhost"),
+            "connect-src must allow Tauri's IPC endpoint or every invoke fails, got: {connect_src}"
+        );
+    }
+}
