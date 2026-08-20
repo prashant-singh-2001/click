@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   button that opened it, which is what its `aria-modal` already claimed. Icon-only buttons
   (move up/down, remove action, remove variable) now announce what they do instead of
   reading out as "up arrow" or "multiplication x". ([#22])
+- **A panic no longer permanently bricks the running app.** Every shared-state lock was
+  `std::sync::Mutex`, which poisons on panic — one panic on any thread (the launch worker,
+  a hotkey press, a tray click) would have made every later `.lock()` on that mutex panic
+  too, forever, while the process itself kept running. Switched to `parking_lot::Mutex`
+  (no poisoning, no `Result` to unwrap), and a `clippy.toml` now bans `std::sync::Mutex`
+  so the pattern can't come back. Also: saving no longer holds the config lock across the
+  disk write, so a save can no longer block the tray, hotkeys, or an in-flight launch for
+  the duration of a `fs::write`. No user-visible behavior change. ([#4])
 
 ### Security
 
@@ -140,6 +148,7 @@ development environment from a single named workspace.
 [0.2.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.2.0
 [0.1.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.1.0
 [#3]: https://github.com/prashant-singh-2001/click/issues/3
+[#4]: https://github.com/prashant-singh-2001/click/issues/4
 [#7]: https://github.com/prashant-singh-2001/click/issues/7
 [#13]: https://github.com/prashant-singh-2001/click/issues/13
 [#18]: https://github.com/prashant-singh-2001/click/issues/18

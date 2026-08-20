@@ -30,6 +30,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 thiserror = "2"
 url = "2"
 mslnk = "0.1"
+parking_lot = "0.12"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [

@@ -22,7 +22,7 @@ pub fn build(app: &tauri::App) -> tauri::Result<()> {
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let workspaces = {
         let state = app.state::<AppState>();
-        let workspaces = state.file.lock().unwrap().workspaces.clone();
+        let workspaces = state.file.lock().workspaces.clone();
         workspaces
     };
 
