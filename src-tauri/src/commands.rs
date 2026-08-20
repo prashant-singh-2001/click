@@ -102,6 +102,37 @@ pub fn delete_workspace(app: AppHandle, state: State<AppState>, id: String) -> R
     persist(&app, &state)
 }
 
+/// Re-inserts `workspace` at `index`. Pure and unit-tested on its own: `save`
+/// upserts by id and pushes when the id is absent, so undoing a delete
+/// through `save_workspace` would silently move the workspace to the end of
+/// the list — this exists so undo (issue #10) can restore its original
+/// position instead. Defensive on both edges: the index is clamped rather
+/// than panicking on an out-of-range value, and an id that's somehow already
+/// present is replaced in place rather than duplicated.
+fn restore_at(workspaces: &mut Vec<Workspace>, workspace: Workspace, index: usize) {
+    workspaces.retain(|w| w.id != workspace.id);
+    let at = index.min(workspaces.len());
+    workspaces.insert(at, workspace);
+}
+
+/// Undoes a delete (issue #10): re-inserts `workspace` at `index` rather
+/// than appending it, so the list looks exactly as it did before. Runs
+/// through `persist` like every other mutation, so the restored workspace's
+/// hotkey and tray entry come back too.
+#[tauri::command]
+pub fn restore_workspace(
+    app: AppHandle,
+    state: State<AppState>,
+    workspace: Workspace,
+    index: usize,
+) -> Result<(), String> {
+    {
+        let mut file = state.file.lock();
+        restore_at(&mut file.workspaces, workspace, index);
+    }
+    persist(&app, &state)
+}
+
 #[tauri::command]
 pub fn duplicate_workspace(
     app: AppHandle,
@@ -267,4 +298,86 @@ pub async fn list_installed_apps(app: AppHandle, refresh: bool) -> Vec<Installed
     tauri::async_runtime::spawn_blocking(move || installed_apps::list(&app, refresh))
         .await
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn workspace(name: &str) -> Workspace {
+        Workspace {
+            id: Uuid::new_v4(),
+            name: name.to_string(),
+            description: String::new(),
+            icon: None,
+            color: None,
+            tags: Vec::new(),
+            variables: HashMap::new(),
+            launch_strategy: crate::model::LaunchStrategy::Sequential,
+            default_delay_ms: 300,
+            hotkey: None,
+            actions: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn restores_at_the_original_middle_index() {
+        let mut workspaces = vec![workspace("A"), workspace("C")];
+        let b = workspace("B");
+        let b_id = b.id;
+
+        restore_at(&mut workspaces, b, 1);
+
+        let names: Vec<&str> = workspaces.iter().map(|w| w.name.as_str()).collect();
+        assert_eq!(names, ["A", "B", "C"]);
+        assert_eq!(workspaces[1].id, b_id);
+    }
+
+    #[test]
+    fn restores_at_index_zero() {
+        let mut workspaces = vec![workspace("B")];
+        let a = workspace("A");
+
+        restore_at(&mut workspaces, a, 0);
+
+        let names: Vec<&str> = workspaces.iter().map(|w| w.name.as_str()).collect();
+        assert_eq!(names, ["A", "B"]);
+    }
+
+    #[test]
+    fn out_of_range_index_clamps_to_the_end() {
+        let mut workspaces = vec![workspace("A")];
+        let b = workspace("B");
+
+        restore_at(&mut workspaces, b, 999);
+
+        let names: Vec<&str> = workspaces.iter().map(|w| w.name.as_str()).collect();
+        assert_eq!(names, ["A", "B"]);
+    }
+
+    #[test]
+    fn restoring_into_an_empty_list_works() {
+        let mut workspaces = Vec::new();
+        let a = workspace("A");
+
+        restore_at(&mut workspaces, a, 0);
+
+        assert_eq!(workspaces.len(), 1);
+        assert_eq!(workspaces[0].name, "A");
+    }
+
+    #[test]
+    fn an_id_already_present_is_replaced_not_duplicated() {
+        let a = workspace("A original");
+        let a_id = a.id;
+        let mut workspaces = vec![a];
+
+        let mut a_restored = workspace("A restored");
+        a_restored.id = a_id;
+        restore_at(&mut workspaces, a_restored, 0);
+
+        assert_eq!(workspaces.len(), 1);
+        assert_eq!(workspaces[0].name, "A restored");
+    }
 }

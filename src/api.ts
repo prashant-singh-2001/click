@@ -14,6 +14,8 @@ export const api = {
   saveWorkspace: (workspace: Workspace) =>
     invoke<void>("save_workspace", { workspace }),
   deleteWorkspace: (id: string) => invoke<void>("delete_workspace", { id }),
+  restoreWorkspace: (workspace: Workspace, index: number) =>
+    invoke<void>("restore_workspace", { workspace, index }),
   duplicateWorkspace: (id: string) =>
     invoke<Workspace>("duplicate_workspace", { id }),
   validateAction: (action: Action) =>
