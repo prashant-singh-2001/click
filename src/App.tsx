@@ -32,7 +32,7 @@ function App() {
           workspaces={workspaces}
           onEdit={(workspace) => setView({ name: "edit", workspace })}
           onNew={() => setView({ name: "edit", workspace: newWorkspace() })}
-          onDeleted={refresh}
+          onChanged={refresh}
         />
       ) : (
         <WorkspaceEditor

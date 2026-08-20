@@ -61,6 +61,7 @@ pub fn run() {
             commands::get_workspace,
             commands::save_workspace,
             commands::delete_workspace,
+            commands::restore_workspace,
             commands::duplicate_workspace,
             commands::validate_action,
             commands::launch_workspace_by_id,

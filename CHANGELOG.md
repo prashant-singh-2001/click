@@ -39,6 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so the pattern can't come back. Also: saving no longer holds the config lock across the
   disk write, so a save can no longer block the tray, hotkeys, or an in-flight launch for
   the duration of a `fs::write`. No user-visible behavior change. ([#4])
+- **Deleting a workspace now asks first, and can be undone.** Delete used to remove a
+  workspace immediately on click, with no confirmation and no way back. It now opens a
+  confirmation dialog, and a successful delete leaves an "Undo" banner that restores the
+  workspace to its exact original position in the list (not appended to the end) — actions,
+  variables, hotkey, and all. The dialog's focus trap and focus restore reuse a new shared
+  `Modal` component, extracted from the app picker (#22) rather than duplicated. ([#10])
 
 ### Security
 
@@ -149,6 +155,7 @@ development environment from a single named workspace.
 [0.1.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.1.0
 [#3]: https://github.com/prashant-singh-2001/click/issues/3
 [#4]: https://github.com/prashant-singh-2001/click/issues/4
+[#10]: https://github.com/prashant-singh-2001/click/issues/10
 [#7]: https://github.com/prashant-singh-2001/click/issues/7
 [#13]: https://github.com/prashant-singh-2001/click/issues/13
 [#18]: https://github.com/prashant-singh-2001/click/issues/18

@@ -57,6 +57,20 @@ button:hover {
   border-color: #396cd8;
 }
 
+/* Issue #10: the only destructive action in the app (delete a workspace) had
+   no visual distinction from Launch/Edit. Reuses the app's one existing red
+   (#c0392b, already used for error banners/status) so the palette doesn't
+   grow. */
+.button-danger {
+  border-color: #c0392b;
+  color: #c0392b;
+}
+
+.button-danger:hover {
+  background-color: rgba(192, 57, 43, 0.1);
+  border-color: #c0392b;
+}
+
 /* Keyboard focus (NFR-7, issue #22). Deliberately `outline` and not
    `box-shadow`: outline is used nowhere else in this file, so it can't
    clobber the drop shadow every button carries above, and it stays visually
