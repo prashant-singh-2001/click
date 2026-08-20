@@ -20,7 +20,6 @@ fn persist(app: &AppHandle, state: &State<AppState>) -> Result<(), String> {
     let blocked = state
         .config_status
         .lock()
-        .unwrap()
         .save_block_reason()
         .map(str::to_string);
     if let Some(reason) = blocked {
@@ -31,11 +30,18 @@ fn persist(app: &AppHandle, state: &State<AppState>) -> Result<(), String> {
         ));
     }
 
-    {
-        let file = state.file.lock().unwrap();
-        let dir = config_dir(app)?;
-        store::save(&dir, &file).map_err(|e| e.to_string())?;
-    }
+    // Snapshot under the lock, then write to disk outside it (issue #4):
+    // store::save does create_dir_all + serialize + write + rename, and
+    // holding the lock across that blocked the tray rebuild, the hotkey
+    // handler, and any in-flight launch for the duration of a disk write.
+    // Tradeoff: this no longer serializes concurrent saves against each
+    // other. That's fine today — every mutating command runs on the main
+    // thread — but if one ever moves to spawn_blocking, two overlapping
+    // saves could hit disk out of order and need a dedicated save lock.
+    let snapshot = state.file.lock().clone();
+    let dir = config_dir(app)?;
+    store::save(&dir, &snapshot).map_err(|e| e.to_string())?;
+
     crate::tray::rebuild(app);
     crate::hotkeys::register_all(app);
     Ok(())
@@ -45,12 +51,12 @@ fn persist(app: &AppHandle, state: &State<AppState>) -> Result<(), String> {
 /// saving is disabled (issue #1).
 #[tauri::command]
 pub fn config_status(state: State<AppState>) -> store::LoadStatus {
-    state.config_status.lock().unwrap().clone()
+    state.config_status.lock().clone()
 }
 
 #[tauri::command]
 pub fn list_workspaces(state: State<AppState>) -> Vec<Workspace> {
-    state.file.lock().unwrap().workspaces.clone()
+    state.file.lock().workspaces.clone()
 }
 
 #[tauri::command]
@@ -59,7 +65,6 @@ pub fn get_workspace(state: State<AppState>, id: String) -> Result<Workspace, St
     state
         .file
         .lock()
-        .unwrap()
         .workspaces
         .iter()
         .find(|w| w.id == uuid)
@@ -77,7 +82,7 @@ pub fn save_workspace(
     workspace: Workspace,
 ) -> Result<(), String> {
     {
-        let mut file = state.file.lock().unwrap();
+        let mut file = state.file.lock();
         if let Some(existing) = file.workspaces.iter_mut().find(|w| w.id == workspace.id) {
             *existing = workspace;
         } else {
@@ -91,7 +96,7 @@ pub fn save_workspace(
 pub fn delete_workspace(app: AppHandle, state: State<AppState>, id: String) -> Result<(), String> {
     let uuid = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
     {
-        let mut file = state.file.lock().unwrap();
+        let mut file = state.file.lock();
         file.workspaces.retain(|w| w.id != uuid);
     }
     persist(&app, &state)
@@ -105,7 +110,7 @@ pub fn duplicate_workspace(
 ) -> Result<Workspace, String> {
     let uuid = Uuid::parse_str(&id).map_err(|e| e.to_string())?;
     let duplicate = {
-        let mut file = state.file.lock().unwrap();
+        let mut file = state.file.lock();
         let original = file
             .workspaces
             .iter()
@@ -170,7 +175,6 @@ pub fn launch_by_id(app: &AppHandle, id: &str) -> Result<LaunchReport, String> {
     let workspace = state
         .file
         .lock()
-        .unwrap()
         .workspaces
         .iter()
         .find(|w| w.id == uuid)
@@ -194,7 +198,6 @@ pub fn create_desktop_shortcut(
     let workspace = state
         .file
         .lock()
-        .unwrap()
         .workspaces
         .iter()
         .find(|w| w.id == uuid)
@@ -250,7 +253,6 @@ pub fn hotkey_status(
     Ok(state
         .statuses
         .lock()
-        .unwrap()
         .get(&uuid)
         .cloned()
         .unwrap_or(HotkeyStatus::Unset))

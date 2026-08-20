@@ -547,6 +547,7 @@ name = "click"
 version = "0.2.3"
 dependencies = [
  "mslnk",
+ "parking_lot",
  "serde",
  "serde_json",
  "tauri",

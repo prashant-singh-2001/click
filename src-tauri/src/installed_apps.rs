@@ -1,6 +1,6 @@
+use parking_lot::Mutex;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
 /// One entry in the installed-apps picker (issue #32). `path` is always a
@@ -211,19 +211,36 @@ fn scan(app: &AppHandle) -> Vec<InstalledApp> {
 pub fn list(app: &AppHandle, refresh: bool) -> Vec<InstalledApp> {
     let state = app.state::<InstalledAppsState>();
     if !refresh {
-        if let Some(cached) = state.cache.lock().unwrap().clone() {
+        if let Some(cached) = state.cache.lock().clone() {
             return cached;
         }
     }
 
     let apps = scan(app);
-    *state.cache.lock().unwrap() = Some(apps.clone());
+    *state.cache.lock() = Some(apps.clone());
     apps
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::panic::{self, AssertUnwindSafe};
+
+    /// Issue #4 — see the matching test on `AppState` in `lib.rs` for the
+    /// full rationale.
+    #[test]
+    fn installed_apps_state_survives_a_panic_while_locked() {
+        let state = InstalledAppsState {
+            cache: Mutex::new(None),
+        };
+
+        let _ = panic::catch_unwind(AssertUnwindSafe(|| {
+            let _guard = state.cache.lock();
+            panic!("simulated panic while holding the lock");
+        }));
+
+        assert!(state.cache.lock().is_none());
+    }
 
     /// A fixture directory holding real (empty) files, so `.exists()` and
     /// extension/name checks in `filter_and_dedup` are exercised against

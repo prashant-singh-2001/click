@@ -1,0 +1,4 @@
+# Issue #4: std's Mutex poisons on panic, and every lock site here is on a
+# path reachable from a spawned worker. parking_lot's has no poisoning and no
+# Result to unwrap. CI runs clippy with -D warnings, so this is a hard gate.
+disallowed-types = ["std::sync::Mutex", "std::sync::RwLock"]

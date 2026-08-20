@@ -1,8 +1,8 @@
 use crate::AppState;
+use parking_lot::Mutex;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use uuid::Uuid;
@@ -55,7 +55,6 @@ pub fn init(app: &tauri::App) -> tauri::Result<()> {
                 let workspace_id = hotkey_state
                     .bindings
                     .lock()
-                    .unwrap()
                     .iter()
                     .find(|(bound, _)| bound == shortcut)
                     .map(|(_, id)| *id);
@@ -79,7 +78,7 @@ pub fn init(app: &tauri::App) -> tauri::Result<()> {
 pub fn register_all(app: &AppHandle) {
     let workspaces = {
         let state = app.state::<AppState>();
-        let workspaces = state.file.lock().unwrap().workspaces.clone();
+        let workspaces = state.file.lock().workspaces.clone();
         workspaces
     };
 
@@ -140,8 +139,8 @@ pub fn register_all(app: &AppHandle) {
     }
 
     let hotkey_state = app.state::<HotkeyState>();
-    *hotkey_state.bindings.lock().unwrap() = bindings;
-    *hotkey_state.statuses.lock().unwrap() = statuses;
+    *hotkey_state.bindings.lock() = bindings;
+    *hotkey_state.statuses.lock() = statuses;
 }
 
 /// Parses `accelerator` and classifies it against what's currently
@@ -179,11 +178,11 @@ fn classify(
 /// would find no matching workspace and do nothing.
 pub fn probe(app: &AppHandle, accelerator: &str, for_workspace: Option<Uuid>) -> HotkeyStatus {
     let hotkey_state = app.state::<HotkeyState>();
-    let bindings = hotkey_state.bindings.lock().unwrap().clone();
+    let bindings = hotkey_state.bindings.lock().clone();
 
     let owner_name = |id: Uuid| {
         let state = app.state::<AppState>();
-        let file = state.file.lock().unwrap();
+        let file = state.file.lock();
         file.workspaces
             .iter()
             .find(|w| w.id == id)
@@ -219,9 +218,30 @@ pub fn probe(app: &AppHandle, accelerator: &str, for_workspace: Option<Uuid>) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::panic::{self, AssertUnwindSafe};
 
     fn no_owner(_: Uuid) -> Option<String> {
         None
+    }
+
+    /// Issue #4 — see the matching test on `AppState` in `lib.rs` for the
+    /// full rationale. `bindings` is read from the shared global-shortcut
+    /// handler on every hotkey press, so a poisoned lock there would have
+    /// broken every workspace's hotkey at once, not just the one that panicked.
+    #[test]
+    fn hotkey_state_survives_a_panic_while_locked() {
+        let state = HotkeyState {
+            bindings: Mutex::new(Vec::new()),
+            statuses: Mutex::new(HashMap::new()),
+        };
+
+        let _ = panic::catch_unwind(AssertUnwindSafe(|| {
+            let _guard = state.bindings.lock();
+            panic!("simulated panic while holding the lock");
+        }));
+
+        assert_eq!(state.bindings.lock().len(), 0);
+        assert_eq!(state.statuses.lock().len(), 0);
     }
 
     #[test]

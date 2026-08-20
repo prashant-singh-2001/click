@@ -10,10 +10,16 @@ mod tray;
 mod vars;
 
 use model::WorkspaceFile;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use store::LoadStatus;
 use tauri::Manager;
 
+// Issue #4: std::sync::Mutex poisons on panic — one panic while holding a
+// lock makes every subsequent .lock().unwrap() on it panic forever, and
+// several of these locks are reachable from spawned launch/hotkey workers.
+// parking_lot's Mutex has no poisoning and lock() returns the guard
+// directly rather than a Result, so the old .lock().unwrap() pattern can't
+// be reintroduced by accident — it won't compile. See also clippy.toml.
 pub struct AppState {
     pub file: Mutex<WorkspaceFile>,
     /// How the config loaded at startup. Gates saving when the on-disk file
@@ -81,6 +87,32 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::panic::{self, AssertUnwindSafe};
+
+    /// Issue #4: a panic while holding a `std::sync::Mutex` guard poisons it
+    /// forever — every later `.lock()` on that mutex panics too, permanently.
+    /// `parking_lot::Mutex` has no poisoning, so the state must still be
+    /// readable right after a panic mid-guard. This test fails against
+    /// `std::sync::Mutex` (confirmed by temporarily reverting the import),
+    /// so don't "fix" the `thread panicked` line in the test output — it's
+    /// the panic this test deliberately triggers, not a real failure.
+    #[test]
+    fn app_state_survives_a_panic_while_locked() {
+        let state = AppState {
+            file: Mutex::new(WorkspaceFile::default()),
+            config_status: Mutex::new(LoadStatus::Ok),
+        };
+
+        let _ = panic::catch_unwind(AssertUnwindSafe(|| {
+            let _guard = state.file.lock();
+            panic!("simulated panic while holding the lock");
+        }));
+
+        assert_eq!(state.file.lock().workspaces.len(), 0);
+        assert!(matches!(*state.config_status.lock(), LoadStatus::Ok));
+    }
+
     /// Pins the webview's Content-Security-Policy (issue #18).
     ///
     /// This needs a test because breaking it is invisible everywhere else:
