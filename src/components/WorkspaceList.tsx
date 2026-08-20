@@ -13,7 +13,7 @@ export function WorkspaceList({
   onChanged,
 }: {
   workspaces: Workspace[];
-  onEdit: (workspace: Workspace) => void;
+  onEdit: (id: string) => void;
   onNew: () => void;
   onChanged: () => void;
 }) {
@@ -24,6 +24,7 @@ export function WorkspaceList({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [undoState, setUndoState] = useState<UndoState | null>(null);
   const [undoError, setUndoError] = useState<string | null>(null);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -78,6 +79,16 @@ export function WorkspaceList({
     }
   }
 
+  async function handleDuplicate(id: string) {
+    setDuplicateError(null);
+    try {
+      await api.duplicateWorkspace(id);
+      onChanged();
+    } catch (err) {
+      setDuplicateError(String(err));
+    }
+  }
+
   return (
     <div className="workspace-list">
       <div className="field-row">
@@ -120,6 +131,12 @@ export function WorkspaceList({
         </div>
       )}
 
+      {duplicateError && (
+        <div className="banner banner-error" role="alert">
+          Duplicate failed: {duplicateError}
+        </div>
+      )}
+
       <ul>
         {filtered.map((workspace) => (
           <li
@@ -153,7 +170,10 @@ export function WorkspaceList({
               >
                 {launchingId === workspace.id ? "Launching…" : "Launch"}
               </button>
-              <button type="button" onClick={() => onEdit(workspace)}>Edit</button>
+              <button type="button" onClick={() => onEdit(workspace.id)}>Edit</button>
+              <button type="button" onClick={() => void handleDuplicate(workspace.id)}>
+                Duplicate
+              </button>
               <button
                 type="button"
                 className="button-danger"

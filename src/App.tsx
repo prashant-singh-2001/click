@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
-import { newWorkspace } from "./types";
 import type { ConfigStatus, Workspace } from "./types";
 import { WorkspaceList } from "./components/WorkspaceList";
 import { WorkspaceEditor } from "./components/WorkspaceEditor";
 import { ConfigWarning } from "./components/ConfigWarning";
 import "./App.css";
 
-type View = { name: "list" } | { name: "edit"; workspace: Workspace };
+type View = { name: "list" } | { name: "edit"; workspaceId: string | null };
 
 function App() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -30,13 +29,13 @@ function App() {
       {view.name === "list" ? (
         <WorkspaceList
           workspaces={workspaces}
-          onEdit={(workspace) => setView({ name: "edit", workspace })}
-          onNew={() => setView({ name: "edit", workspace: newWorkspace() })}
+          onEdit={(id) => setView({ name: "edit", workspaceId: id })}
+          onNew={() => setView({ name: "edit", workspaceId: null })}
           onChanged={refresh}
         />
       ) : (
         <WorkspaceEditor
-          workspace={view.workspace}
+          workspaceId={view.workspaceId}
           onSaved={async () => {
             await refresh();
             setView({ name: "list" });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { newAppAction, newUrlAction } from "../types";
+import { newAppAction, newUrlAction, newWorkspace } from "../types";
 import type { HotkeyStatus, LaunchReport, Workspace } from "../types";
 import { ActionEditor } from "./ActionEditor";
 import { HotkeyInput } from "./HotkeyInput";
@@ -9,15 +9,20 @@ import { LaunchProgress } from "./LaunchProgress";
 import { TagEditor } from "./TagEditor";
 
 export function WorkspaceEditor({
-  workspace,
+  workspaceId,
   onSaved,
   onCancel,
 }: {
-  workspace: Workspace;
+  workspaceId: string | null;
   onSaved: () => void;
   onCancel: () => void;
 }) {
-  const [draft, setDraft] = useState<Workspace>(workspace);
+  // null means "new" — nothing exists server-side yet to fetch, so start a
+  // blank draft immediately (issue #16).
+  const [draft, setDraft] = useState<Workspace | null>(
+    workspaceId === null ? newWorkspace() : null,
+  );
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [report, setReport] = useState<LaunchReport | null>(null);
@@ -26,52 +31,83 @@ export function WorkspaceEditor({
   const [hotkeyStatus, setHotkeyStatus] = useState<HotkeyStatus | null>(null);
 
   useEffect(() => {
-    // Runs once: the editor only ever hosts a single workspace for its
-    // whole lifetime (opening a different one goes through the list first).
-    api.hotkeyStatus(workspace.id).then(setHotkeyStatus).catch(console.error);
-  }, [workspace.id]);
+    if (workspaceId === null) return;
+    api.getWorkspace(workspaceId).then(setDraft).catch((err) => setLoadError(String(err)));
+  }, [workspaceId]);
 
-  function handleHotkeyChange(next: string | null) {
+  const draftId = draft?.id;
+  useEffect(() => {
+    // Depends on draftId, not draft, so this refetches only when the loaded
+    // workspace's identity changes — not on every keystroke. The editor only
+    // ever hosts one workspace for its whole lifetime (opening a different
+    // one goes through the list first, which passes a new workspaceId and
+    // re-runs the fetch effect above).
+    if (!draftId) return;
+    api.hotkeyStatus(draftId).then(setHotkeyStatus).catch(console.error);
+  }, [draftId]);
+
+  if (loadError) {
+    return (
+      <div className="workspace-editor">
+        <div className="banner banner-error" role="alert">
+          Failed to load workspace: {loadError}
+        </div>
+        <button type="button" onClick={onCancel}>
+          Back
+        </button>
+      </div>
+    );
+  }
+
+  if (!draft) {
+    return (
+      <div className="workspace-editor">
+        <p>Loading workspace…</p>
+      </div>
+    );
+  }
+
+  const handleHotkeyChange = (next: string | null) => {
     setDraft({ ...draft, hotkey: next });
     if (!next) {
       setHotkeyStatus({ kind: "unset" });
       return;
     }
     api.probeHotkey(next, draft.id).then(setHotkeyStatus).catch(console.error);
-  }
+  };
 
-  function updateAction(index: number, next: Workspace["actions"][number]) {
+  const updateAction = (index: number, next: Workspace["actions"][number]) => {
     const actions = [...draft.actions];
     actions[index] = next;
     setDraft({ ...draft, actions });
-  }
+  };
 
-  function removeAction(index: number) {
+  const removeAction = (index: number) => {
     setDraft({ ...draft, actions: draft.actions.filter((_, i) => i !== index) });
-  }
+  };
 
-  function moveAction(index: number, delta: number) {
+  const moveAction = (index: number, delta: number) => {
     const target = index + delta;
     if (target < 0 || target >= draft.actions.length) return;
     const actions = [...draft.actions];
     [actions[index], actions[target]] = [actions[target], actions[index]];
     setDraft({ ...draft, actions });
-  }
+  };
 
-  function updateVariable(oldKey: string, newKey: string, value: string) {
+  const updateVariable = (oldKey: string, newKey: string, value: string) => {
     const variables = { ...draft.variables };
     if (oldKey !== newKey) delete variables[oldKey];
     variables[newKey] = value;
     setDraft({ ...draft, variables });
-  }
+  };
 
-  function removeVariable(key: string) {
+  const removeVariable = (key: string) => {
     const variables = { ...draft.variables };
     delete variables[key];
     setDraft({ ...draft, variables });
-  }
+  };
 
-  async function handleSave() {
+  const handleSave = async () => {
     setSaving(true);
     setActionError(null);
     try {
@@ -82,9 +118,9 @@ export function WorkspaceEditor({
     } finally {
       setSaving(false);
     }
-  }
+  };
 
-  async function handleCreateShortcut() {
+  const handleCreateShortcut = async () => {
     setShortcutMessage(null);
     try {
       await api.saveWorkspace(draft);
@@ -93,9 +129,9 @@ export function WorkspaceEditor({
     } catch (err) {
       setShortcutMessage(`Failed: ${String(err)}`);
     }
-  }
+  };
 
-  async function handleLaunch() {
+  const handleLaunch = async () => {
     setLaunching(true);
     setReport(null);
     setActionError(null);
@@ -107,7 +143,7 @@ export function WorkspaceEditor({
     } finally {
       setLaunching(false);
     }
-  }
+  };
 
   return (
     <div className="workspace-editor">

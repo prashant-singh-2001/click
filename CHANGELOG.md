@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Workspaces can now be duplicated from the list.** The backend command has existed since
+  the beginning (FR-1.1 lists duplicate as an MVP capability) but had no UI trigger — added
+  a Duplicate button alongside Launch/Edit/Delete. ([#16])
+
 ### Changed
 
 - **The launch engine now has unit test coverage.** `launch.rs` is split into a pure
@@ -19,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `clippy`). Fixing what it found turned up a handful of `.then()` chains whose rejection
   went to an unhandled-promise-rejection warning instead of anywhere useful — those now
   log to the console explicitly. No user-visible behavior change. ([#13])
+- **Editing a workspace now fetches it fresh instead of reusing whatever the list already
+  had in memory.** The `get_workspace` command existed and was registered but had zero
+  callers — the editor received the full object straight from the list. It now fetches by
+  id, so it always shows the latest persisted state (relevant if the CLI or another
+  instance touched the config between the list load and the click), and a loading/error
+  state covers the fetch. No change for creating a new workspace, which still starts
+  blank immediately with no round trip. ([#16])
 
 ### Fixed
 
@@ -156,6 +169,7 @@ development environment from a single named workspace.
 [#3]: https://github.com/prashant-singh-2001/click/issues/3
 [#4]: https://github.com/prashant-singh-2001/click/issues/4
 [#10]: https://github.com/prashant-singh-2001/click/issues/10
+[#16]: https://github.com/prashant-singh-2001/click/issues/16
 [#7]: https://github.com/prashant-singh-2001/click/issues/7
 [#13]: https://github.com/prashant-singh-2001/click/issues/13
 [#18]: https://github.com/prashant-singh-2001/click/issues/18
