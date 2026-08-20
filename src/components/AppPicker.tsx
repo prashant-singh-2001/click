@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import type { InstalledApp } from "../types";
 
@@ -12,9 +12,22 @@ export function AppPicker({
   const [apps, setApps] = useState<InstalledApp[] | null>(null);
   const [query, setQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     api.listInstalledApps(false).then(setApps).catch(console.error);
+  }, []);
+
+  // Move focus into the dialog on open, and hand it back to whatever opened
+  // it on close. Reading activeElement here rather than using `autoFocus` is
+  // what makes the restore possible at all: autoFocus fires during commit,
+  // before effects run, so by this point the trigger would already have lost
+  // focus and there'd be nothing to return to (issue #22).
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    inputRef.current?.focus();
+    return () => previouslyFocused?.focus();
   }, []);
 
   const filtered = useMemo(() => {
@@ -34,22 +47,49 @@ export function AppPicker({
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Escape") onClose();
+    if (e.key === "Escape") {
+      onClose();
+      return;
+    }
+    if (e.key !== "Tab") return;
+
+    // This dialog declares aria-modal="true", which promises focus cannot
+    // reach the editor behind the overlay. Nothing enforced that promise, so
+    // Tab walked straight out of it (issue #22). Rescan disables itself while
+    // scanning, hence :not([disabled]).
+    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    if (!focusable || focusable.length === 0) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose} onKeyDown={handleKeyDown}>
+    // Backdrop click-to-dismiss is a mouse-only affordance; Escape and the
+    // Close button are the keyboard equivalents, so this needs no key handler.
+    <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal app-picker"
         role="dialog"
         aria-modal="true"
         aria-label="Choose an installed app"
+        ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
       >
         <div className="field-row">
           <input
             className="field-grow"
-            autoFocus
+            ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.currentTarget.value)}
             placeholder="Search installed apps…"

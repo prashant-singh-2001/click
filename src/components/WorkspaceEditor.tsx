@@ -172,7 +172,15 @@ export function WorkspaceEditor({
               onChange={(e) => updateVariable(key, key, e.currentTarget.value)}
               placeholder="value"
             />
-            <button type="button" onClick={() => removeVariable(key)}>✕</button>
+            {/* Interpolate the name so N rows don't all announce the same
+                thing, matching TagEditor's `Remove tag ${tag}` (issue #22). */}
+            <button
+              type="button"
+              aria-label={`Remove variable ${key}`}
+              onClick={() => removeVariable(key)}
+            >
+              ✕
+            </button>
           </div>
         ))}
         <button

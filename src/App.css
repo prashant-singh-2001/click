@@ -57,6 +57,17 @@ button:hover {
   border-color: #396cd8;
 }
 
+/* Keyboard focus (NFR-7, issue #22). Deliberately `outline` and not
+   `box-shadow`: outline is used nowhere else in this file, so it can't
+   clobber the drop shadow every button carries above, and it stays visually
+   distinct from the box-shadow ring that already means "selected/armed"
+   (.hotkey-capture-active, .icon-picker-option[aria-pressed="true"]).
+   Outline also survives Windows high-contrast mode; box-shadow does not. */
+:focus-visible {
+  outline: 2px solid #396cd8;
+  outline-offset: 2px;
+}
+
 .field-row {
   display: flex;
   align-items: center;
@@ -195,6 +206,10 @@ textarea {
 
 .hotkey-status {
   font-size: 0.85em;
+}
+
+.hotkey-hint {
+  opacity: 0.7;
 }
 
 .hotkey-status-ok {
@@ -377,6 +392,12 @@ textarea {
     color: #ffffff;
     background-color: #1c1c1c;
     border-color: rgba(255, 255, 255, 0.18);
+  }
+
+  /* #396cd8 manages only ~3.9:1 against the dark input background, so the
+     ring gets lifted rather than inherited from light (issue #22). */
+  :focus-visible {
+    outline-color: #7ea6f0;
   }
 
   .workspace-card {

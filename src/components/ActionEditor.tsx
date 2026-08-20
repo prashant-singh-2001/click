@@ -42,6 +42,7 @@ export function ActionEditor({
           checked={action.enabled}
           onChange={(e) => onChange({ ...action, enabled: e.currentTarget.checked })}
           title="Enabled"
+          aria-label="Enabled"
         />
         <input
           className="action-label"
@@ -50,9 +51,23 @@ export function ActionEditor({
           placeholder="Label"
         />
         <span className="action-type-badge">{action.type}</span>
-        <button type="button" onClick={onMoveUp} title="Move up">↑</button>
-        <button type="button" onClick={onMoveDown} title="Move down">↓</button>
-        <button type="button" onClick={onRemove} title="Remove">✕</button>
+        {/* `title` stays as the mouse tooltip, but it's only a last-resort
+            accessible name — the glyph wins, so these announced as "up arrow"
+            and "multiplication x". aria-label is the real name (issue #22). */}
+        <button type="button" onClick={onMoveUp} title="Move up" aria-label="Move action up">
+          ↑
+        </button>
+        <button
+          type="button"
+          onClick={onMoveDown}
+          title="Move down"
+          aria-label="Move action down"
+        >
+          ↓
+        </button>
+        <button type="button" onClick={onRemove} title="Remove" aria-label="Remove action">
+          ✕
+        </button>
       </div>
 
       {action.type === "app" ? (
