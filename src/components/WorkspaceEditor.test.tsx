@@ -169,4 +169,14 @@ describe("WorkspaceEditor", () => {
       expect.objectContaining({ color: null }),
     );
   });
+
+  // Issue #22: this button was the only control in the app with no accessible
+  // name at all — not even a title — so it announced as the bare "✕" glyph.
+  // The name interpolates the variable so N rows stay distinguishable.
+  it("names the variable-remove button after the variable it removes (#22)", () => {
+    const workspace = makeWorkspace({ variables: { API_KEY: "abc" } });
+    render(<WorkspaceEditor workspace={workspace} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "Remove variable API_KEY" })).toBeInTheDocument();
+  });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { api } from "../api";
 import type { HotkeyStatus } from "../types";
 
@@ -92,6 +92,7 @@ export function HotkeyInput({
 }) {
   const [capturing, setCapturing] = useState(false);
   const [needsModifier, setNeedsModifier] = useState(false);
+  const hintId = useId();
 
   // A combo already bound to anything — another of the user's own
   // workspaces, or another app — is intercepted by the OS before it ever
@@ -119,6 +120,17 @@ export function HotkeyInput({
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLButtonElement>) {
     if (!capturing) return;
+
+    // Tab is deliberately not captured. preventDefault-ing it would pin
+    // keyboard focus to this button with no way out but Escape or a mouse
+    // click — a WCAG 2.1.2 keyboard trap (issue #22). Nothing is given up:
+    // Windows reserves Alt+Tab / Ctrl+Alt+Tab / Win+Tab, so a Tab-based
+    // accelerator could never register anyway.
+    if (e.code === "Tab") {
+      endCapture();
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
 
@@ -153,6 +165,7 @@ export function HotkeyInput({
         onClick={enterCapture}
         onKeyDown={handleKeyDown}
         onBlur={endCapture}
+        aria-describedby={capturing ? hintId : undefined}
       >
         {capturing ? "Press a key combo…" : value || "Click to set a hotkey"}
       </button>
@@ -165,6 +178,14 @@ export function HotkeyInput({
         >
           ✕
         </button>
+      )}
+      {/* Escape has always been the way out of capture, but nothing said so.
+          Tied to the button with aria-describedby so it's announced on focus,
+          not just visible (issue #22). */}
+      {capturing && (
+        <span id={hintId} className="hotkey-status hotkey-hint">
+          Press Esc to cancel
+        </span>
       )}
       {capturing && needsModifier && (
         <span className="hotkey-status hotkey-status-warn">

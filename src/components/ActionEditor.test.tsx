@@ -158,4 +158,49 @@ describe("ActionEditor", () => {
 
     expect(screen.queryByPlaceholderText(/search installed apps/i)).not.toBeInTheDocument();
   });
+
+  // Issue #22: these are icon-only. `title` is only a last-resort accname
+  // source — the glyph wins — so they announced as "up arrow" / "down arrow"
+  // / "multiplication x" rather than as anything actionable.
+  it("gives the icon-only row controls real accessible names (#22)", () => {
+    render(
+      <ActionEditor
+        action={makeAppAction()}
+        onChange={noop}
+        onRemove={noop}
+        onMoveUp={noop}
+        onMoveDown={noop}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Move action up" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Move action down" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove action" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Enabled" })).toBeInTheDocument();
+  });
+
+  it("keeps the icon-only buttons wired to their handlers (#22)", async () => {
+    const user = userEvent.setup();
+    const onMoveUp = vi.fn();
+    const onMoveDown = vi.fn();
+    const onRemove = vi.fn();
+
+    render(
+      <ActionEditor
+        action={makeAppAction()}
+        onChange={noop}
+        onRemove={onRemove}
+        onMoveUp={onMoveUp}
+        onMoveDown={onMoveDown}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Move action up" }));
+    await user.click(screen.getByRole("button", { name: "Move action down" }));
+    await user.click(screen.getByRole("button", { name: "Remove action" }));
+
+    expect(onMoveUp).toHaveBeenCalledTimes(1);
+    expect(onMoveDown).toHaveBeenCalledTimes(1);
+    expect(onRemove).toHaveBeenCalledTimes(1);
+  });
 });

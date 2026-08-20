@@ -20,6 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   went to an unhandled-promise-rejection warning instead of anywhere useful — those now
   log to the console explicitly. No user-visible behavior change. ([#13])
 
+### Fixed
+
+- **The UI is properly keyboard-navigable now** (NFR-7). There was no focus styling at
+  all, so tabbing through the app was effectively invisible; every control now shows a
+  focus ring. The hotkey field no longer traps focus — it swallowed *every* keystroke
+  while capturing, Tab included, which left Escape as the only way out and nothing on
+  screen saying so. Tab now exits capture, and a "Press Esc to cancel" hint appears while
+  it's armed. The app picker keeps focus inside itself while open and hands it back to the
+  button that opened it, which is what its `aria-modal` already claimed. Icon-only buttons
+  (move up/down, remove action, remove variable) now announce what they do instead of
+  reading out as "up arrow" or "multiplication x". ([#22])
+
 ### Security
 
 - **The webview now runs under a Content-Security-Policy.** It was disabled outright
@@ -131,6 +143,7 @@ development environment from a single named workspace.
 [#7]: https://github.com/prashant-singh-2001/click/issues/7
 [#13]: https://github.com/prashant-singh-2001/click/issues/13
 [#18]: https://github.com/prashant-singh-2001/click/issues/18
+[#22]: https://github.com/prashant-singh-2001/click/issues/22
 [#23]: https://github.com/prashant-singh-2001/click/issues/23
 [#5]: https://github.com/prashant-singh-2001/click/issues/5
 [#14]: https://github.com/prashant-singh-2001/click/issues/14

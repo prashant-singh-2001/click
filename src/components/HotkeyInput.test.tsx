@@ -57,4 +57,40 @@ describe("HotkeyInput", () => {
     expect(onCommit).not.toHaveBeenCalled();
     expect(screen.getByText(/add a modifier/i)).toBeInTheDocument();
   });
+
+  // Issue #22 — a WCAG 2.1.2 keyboard trap. handleKeyDown used to
+  // preventDefault every key while capturing, Tab included, so once a
+  // keyboard user entered capture the only ways out were Escape (undocumented
+  // at the time) or a mouse click. userEvent honours defaultPrevented, so
+  // this genuinely fails against the old handler.
+  it("lets Tab move focus out of the capture button rather than trapping it (#22)", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <HotkeyInput value={null} status={null} onCommit={vi.fn()} />
+        <button type="button">after</button>
+      </>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /click to set a hotkey/i }));
+    expect(screen.getByRole("button", { name: /press a key combo/i })).toBeInTheDocument();
+
+    await user.tab();
+
+    expect(screen.getByRole("button", { name: "after" })).toHaveFocus();
+  });
+
+  it("surfaces the Escape affordance and links it to the button (#22)", async () => {
+    const user = userEvent.setup();
+    render(<HotkeyInput value={null} status={null} onCommit={vi.fn()} />);
+
+    expect(screen.queryByText(/press esc to cancel/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /click to set a hotkey/i }));
+
+    expect(screen.getByText(/press esc to cancel/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /press a key combo/i }),
+    ).toHaveAccessibleDescription(/press esc to cancel/i);
+  });
 });
