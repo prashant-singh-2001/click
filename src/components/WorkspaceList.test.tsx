@@ -205,4 +205,36 @@ describe("WorkspaceList", () => {
     expect(screen.queryByRole("button", { name: /^undo$/i })).not.toBeInTheDocument();
     expect(mockedApi.restoreWorkspace).not.toHaveBeenCalled();
   });
+
+  // Issue #16: duplicate_workspace was implemented and registered but had no
+  // UI trigger, despite FR-1.1 listing duplicate as an MVP capability.
+  it("clicking Duplicate calls api.duplicateWorkspace and reports the change", async () => {
+    const user = userEvent.setup();
+    const onChanged = vi.fn();
+    const workspaces = [makeWorkspace({ name: "Backend Dev" })];
+    mockedApi.duplicateWorkspace.mockResolvedValue(makeWorkspace({ name: "Backend Dev (copy)" }));
+
+    render(
+      <WorkspaceList workspaces={workspaces} onEdit={noop} onNew={noop} onChanged={onChanged} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^duplicate$/i }));
+
+    expect(mockedApi.duplicateWorkspace).toHaveBeenCalledWith(workspaces[0].id);
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("shows an error banner when duplicate rejects", async () => {
+    const user = userEvent.setup();
+    mockedApi.duplicateWorkspace.mockRejectedValue("disk error");
+    const workspaces = [makeWorkspace({ name: "Backend Dev" })];
+
+    render(
+      <WorkspaceList workspaces={workspaces} onEdit={noop} onNew={noop} onChanged={noop} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^duplicate$/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Duplicate failed: disk error");
+  });
 });

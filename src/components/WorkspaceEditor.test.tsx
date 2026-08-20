@@ -15,6 +15,15 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
 
 beforeEach(resetApiMocks);
 
+// Renders editing an existing workspace — the realistic path, and the one
+// that exercises the get_workspace fetch (issue #16). Waits for the fetch to
+// resolve before returning, so callers can use synchronous `getBy*` after.
+async function renderExisting(workspace: Workspace) {
+  mockedApi.getWorkspace.mockResolvedValue(workspace);
+  render(<WorkspaceEditor workspaceId={workspace.id} onSaved={vi.fn()} onCancel={vi.fn()} />);
+  await screen.findByPlaceholderText("Workspace name");
+}
+
 describe("WorkspaceEditor", () => {
   // Issue #2 was closed as COMPLETED, but the underlying bug is still in
   // WorkspaceEditor.tsx: variable rows are keyed by the name being edited,
@@ -26,7 +35,7 @@ describe("WorkspaceEditor", () => {
   it.fails("keeps focus in the variable-name input while renaming (#2)", async () => {
     const user = userEvent.setup();
     const workspace = makeWorkspace({ variables: { OLD: "value" } });
-    render(<WorkspaceEditor workspace={workspace} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await renderExisting(workspace);
 
     const nameInput = screen.getByPlaceholderText("NAME");
     await user.click(nameInput);
@@ -41,6 +50,9 @@ describe("WorkspaceEditor", () => {
   // The eventual fix (new Rust command, out of scope here) will need to send
   // the actual draft rather than just its id; this test encodes that as the
   // desired contract and is expected to fail against the current bare-id call.
+  // This is orthogonal to issue #16's fetch-by-id rewiring — handleLaunch's
+  // signature is untouched by that change, so this stays red for the exact
+  // same reason it always has.
   it.fails("Launch reflects unsaved draft edits, not the last-saved record (#9)", async () => {
     const user = userEvent.setup();
     const workspace = makeWorkspace({
@@ -56,8 +68,7 @@ describe("WorkspaceEditor", () => {
       ],
     });
     mockedApi.launchWorkspace.mockResolvedValue({ outcomes: [] });
-
-    render(<WorkspaceEditor workspace={workspace} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await renderExisting(workspace);
 
     const urlInput = screen.getByDisplayValue("http://localhost:3000");
     await user.clear(urlInput);
@@ -82,8 +93,8 @@ describe("WorkspaceEditor", () => {
   it("shows a Save failed banner when saving rejects", async () => {
     const user = userEvent.setup();
     mockedApi.saveWorkspace.mockRejectedValue("disk error");
+    await renderExisting(makeWorkspace());
 
-    render(<WorkspaceEditor workspace={makeWorkspace()} onSaved={vi.fn()} onCancel={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Save failed: disk error");
@@ -92,8 +103,8 @@ describe("WorkspaceEditor", () => {
   it("shows a Launch failed banner when launching rejects", async () => {
     const user = userEvent.setup();
     mockedApi.launchWorkspace.mockRejectedValue("workspace abc123 not found");
+    await renderExisting(makeWorkspace());
 
-    render(<WorkspaceEditor workspace={makeWorkspace()} onSaved={vi.fn()} onCancel={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: /^launch$/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -103,7 +114,7 @@ describe("WorkspaceEditor", () => {
 
   it("adds a tag and includes it in the saved workspace", async () => {
     const user = userEvent.setup();
-    render(<WorkspaceEditor workspace={makeWorkspace()} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await renderExisting(makeWorkspace());
 
     await user.type(screen.getByPlaceholderText(/add a tag/i), "backend");
     await user.click(screen.getByRole("button", { name: /add tag/i }));
@@ -116,7 +127,7 @@ describe("WorkspaceEditor", () => {
 
   it("rejects a blank tag", async () => {
     const user = userEvent.setup();
-    render(<WorkspaceEditor workspace={makeWorkspace()} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await renderExisting(makeWorkspace());
 
     await user.type(screen.getByPlaceholderText(/add a tag/i), "   ");
     await user.click(screen.getByRole("button", { name: /add tag/i }));
@@ -126,8 +137,7 @@ describe("WorkspaceEditor", () => {
 
   it("rejects a duplicate tag (case-insensitive)", async () => {
     const user = userEvent.setup();
-    const workspace = makeWorkspace({ tags: ["Backend"] });
-    render(<WorkspaceEditor workspace={workspace} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await renderExisting(makeWorkspace({ tags: ["Backend"] }));
 
     await user.type(screen.getByPlaceholderText(/add a tag/i), "backend");
     await user.click(screen.getByRole("button", { name: /add tag/i }));
@@ -137,8 +147,7 @@ describe("WorkspaceEditor", () => {
 
   it("removes a tag", async () => {
     const user = userEvent.setup();
-    const workspace = makeWorkspace({ tags: ["backend"] });
-    render(<WorkspaceEditor workspace={workspace} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await renderExisting(makeWorkspace({ tags: ["backend"] }));
 
     await user.click(screen.getByRole("button", { name: /remove tag backend/i }));
 
@@ -147,7 +156,7 @@ describe("WorkspaceEditor", () => {
 
   it("includes the picked icon and color in the saved workspace", async () => {
     const user = userEvent.setup();
-    render(<WorkspaceEditor workspace={makeWorkspace()} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await renderExisting(makeWorkspace());
 
     await user.click(screen.getByRole("button", { name: /use 🐳 as icon/i }));
     await user.click(screen.getByRole("button", { name: /^save$/i }));
@@ -159,8 +168,7 @@ describe("WorkspaceEditor", () => {
 
   it("clears the color back to null", async () => {
     const user = userEvent.setup();
-    const workspace = makeWorkspace({ color: "#4f46e5" });
-    render(<WorkspaceEditor workspace={workspace} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await renderExisting(makeWorkspace({ color: "#4f46e5" }));
 
     await user.click(screen.getByRole("button", { name: /no color/i }));
     await user.click(screen.getByRole("button", { name: /^save$/i }));
@@ -173,10 +181,53 @@ describe("WorkspaceEditor", () => {
   // Issue #22: this button was the only control in the app with no accessible
   // name at all — not even a title — so it announced as the bare "✕" glyph.
   // The name interpolates the variable so N rows stay distinguishable.
-  it("names the variable-remove button after the variable it removes (#22)", () => {
-    const workspace = makeWorkspace({ variables: { API_KEY: "abc" } });
-    render(<WorkspaceEditor workspace={workspace} onSaved={vi.fn()} onCancel={vi.fn()} />);
+  it("names the variable-remove button after the variable it removes (#22)", async () => {
+    await renderExisting(makeWorkspace({ variables: { API_KEY: "abc" } }));
 
     expect(screen.getByRole("button", { name: "Remove variable API_KEY" })).toBeInTheDocument();
+  });
+
+  // Issue #16: a brand-new workspace doesn't exist server-side yet, so there
+  // is nothing to fetch — it must render immediately with a blank draft.
+  it("starts a blank draft immediately for a new workspace, without fetching", () => {
+    render(<WorkspaceEditor workspaceId={null} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.getByPlaceholderText("Workspace name")).toHaveValue("New workspace");
+    expect(mockedApi.getWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("shows a loading state while an existing workspace is being fetched", () => {
+    mockedApi.getWorkspace.mockReturnValue(new Promise(() => {})); // never resolves
+
+    render(
+      <WorkspaceEditor workspaceId="some-id" onSaved={vi.fn()} onCancel={vi.fn()} />,
+    );
+
+    expect(screen.getByText(/loading workspace/i)).toBeInTheDocument();
+  });
+
+  it("shows an error and a working Back button when the fetch rejects", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    mockedApi.getWorkspace.mockRejectedValue("workspace xyz not found");
+
+    render(<WorkspaceEditor workspaceId="xyz" onSaved={vi.fn()} onCancel={onCancel} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Failed to load workspace: workspace xyz not found",
+    );
+
+    await user.click(screen.getByRole("button", { name: /^back$/i }));
+    expect(onCancel).toHaveBeenCalled();
+  });
+
+  // The test that actually proves issue #16's fix: editing an existing
+  // workspace fetches it by id rather than receiving it as a prop.
+  it("fetches the workspace by id when editing an existing one (#16)", async () => {
+    const workspace = makeWorkspace({ name: "Gamified Tracker Dev" });
+    await renderExisting(workspace);
+
+    expect(screen.getByPlaceholderText("Workspace name")).toHaveValue("Gamified Tracker Dev");
+    expect(mockedApi.getWorkspace).toHaveBeenCalledWith(workspace.id);
   });
 });
