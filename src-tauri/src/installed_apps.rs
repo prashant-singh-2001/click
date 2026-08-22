@@ -176,6 +176,7 @@ fn scan(app: &AppHandle) -> Vec<InstalledApp> {
     #[cfg(windows)]
     {
         let Some(_com) = resolve::ComGuard::new() else {
+            log::warn!("COM initialization failed; the installed-apps picker will be empty");
             return Vec::new();
         };
 

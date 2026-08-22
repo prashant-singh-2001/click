@@ -62,7 +62,13 @@ pub fn init(app: &tauri::App) -> tauri::Result<()> {
                 if let Some(id) = workspace_id {
                     let app = app.clone();
                     tauri::async_runtime::spawn_blocking(move || {
-                        let _ = crate::commands::launch_by_id(&app, &id.to_string());
+                        if let Err(err) = crate::commands::launch_by_id(
+                            &app,
+                            &id.to_string(),
+                            crate::commands::LaunchTrigger::Hotkey,
+                        ) {
+                            log::error!("hotkey launch failed for workspace {id}: {err}");
+                        }
                     });
                 }
             })
@@ -83,7 +89,9 @@ pub fn register_all(app: &AppHandle) {
     };
 
     let gs = app.global_shortcut();
-    let _ = gs.unregister_all();
+    if let Err(err) = gs.unregister_all() {
+        log::warn!("failed to unregister existing hotkeys before re-registering: {err}");
+    }
 
     let mut bindings: Vec<(Shortcut, Uuid)> = Vec::new();
     let mut statuses = HashMap::new();
@@ -136,6 +144,32 @@ pub fn register_all(app: &AppHandle) {
                 );
             }
         }
+    }
+
+    let registered = statuses
+        .values()
+        .filter(|s| matches!(s, HotkeyStatus::Registered))
+        .count();
+    let attempted = statuses
+        .values()
+        .filter(|s| !matches!(s, HotkeyStatus::Unset))
+        .count();
+    if attempted > 0 {
+        for (id, status) in &statuses {
+            match status {
+                HotkeyStatus::Invalid { reason } => {
+                    log::warn!("hotkey for workspace {id} is invalid: {reason}");
+                }
+                HotkeyStatus::Duplicate { workspace_name } => {
+                    log::warn!("hotkey for workspace {id} duplicates \"{workspace_name}\"'s combo");
+                }
+                HotkeyStatus::Conflict { reason } => {
+                    log::warn!("hotkey for workspace {id} conflicts with another app: {reason}");
+                }
+                HotkeyStatus::Unset | HotkeyStatus::Registered => {}
+            }
+        }
+        log::info!("hotkeys: {registered}/{attempted} registered");
     }
 
     let hotkey_state = app.state::<HotkeyState>();
@@ -206,7 +240,11 @@ pub fn probe(app: &AppHandle, accelerator: &str, for_workspace: Option<Uuid>) ->
     let gs = app.global_shortcut();
     match gs.register(shortcut) {
         Ok(()) => {
-            let _ = gs.unregister(shortcut);
+            if let Err(err) = gs.unregister(shortcut) {
+                log::warn!(
+                    "probe left '{accelerator}' registered with the OS after cleanup failed: {err}"
+                );
+            }
             HotkeyStatus::Registered
         }
         Err(err) => HotkeyStatus::Conflict {

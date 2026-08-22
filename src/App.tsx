@@ -4,6 +4,7 @@ import type { ConfigStatus, Workspace } from "./types";
 import { WorkspaceList } from "./components/WorkspaceList";
 import { WorkspaceEditor } from "./components/WorkspaceEditor";
 import { ConfigWarning } from "./components/ConfigWarning";
+import { DiagnosticsFooter } from "./components/DiagnosticsFooter";
 import "./App.css";
 
 type View = { name: "list" } | { name: "edit"; workspaceId: string | null };
@@ -43,6 +44,7 @@ function App() {
           onCancel={() => setView({ name: "list" })}
         />
       )}
+      <DiagnosticsFooter />
     </main>
   );
 }

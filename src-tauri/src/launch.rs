@@ -37,6 +37,37 @@ pub struct LaunchReport {
     pub outcomes: Vec<ActionOutcome>,
 }
 
+impl LaunchReport {
+    /// A one-line human summary for the log — "2 started, 1 failed". Omits
+    /// any status with a zero count so an all-success run reads as "3
+    /// started" rather than "3 started, 0 failed, 0 skipped".
+    pub fn summary(&self) -> String {
+        let started = self.count(ActionStatus::Started);
+        let failed = self.count(ActionStatus::Failed);
+        let skipped = self.count(ActionStatus::Skipped);
+
+        let parts: Vec<String> = [
+            (started, "started"),
+            (failed, "failed"),
+            (skipped, "skipped"),
+        ]
+        .into_iter()
+        .filter(|(count, _)| *count > 0)
+        .map(|(count, label)| format!("{count} {label}"))
+        .collect();
+
+        if parts.is_empty() {
+            "no actions".to_string()
+        } else {
+            parts.join(", ")
+        }
+    }
+
+    fn count(&self, status: ActionStatus) -> usize {
+        self.outcomes.iter().filter(|o| o.status == status).count()
+    }
+}
+
 /// An action resolved down to something concrete and executable — variables
 /// substituted, `.cmd`/`.bat` routing already decided. Pure data: holds no
 /// `AppHandle` and runs nothing. Not `Serialize` yet — nothing needs to send
@@ -67,6 +98,40 @@ pub enum ResolvedCommand {
     OpenPath {
         path: String,
     },
+}
+
+impl ResolvedCommand {
+    /// What gets logged at the default level — enough to say what launched,
+    /// never enough to leak a secret-bearing argument. See `describe_verbose`
+    /// for the full command, which only ever reaches the log at DEBUG.
+    fn describe(&self) -> String {
+        match self {
+            ResolvedCommand::Spawn { display_path, .. } => format!("run '{display_path}'"),
+            ResolvedCommand::OpenUrl { url } => format!("open url '{url}'"),
+            ResolvedCommand::OpenPath { path } => format!("open '{path}'"),
+        }
+    }
+
+    /// The full resolved command, args and cwd included. An arg can carry a
+    /// value pulled from `${VAR}` or the process environment, and this
+    /// project's own SECURITY.md already warns against plaintext secrets
+    /// reaching disk — so this is only ever logged at DEBUG (`CLICK_LOG=debug`),
+    /// never at the default level.
+    fn describe_verbose(&self) -> String {
+        match self {
+            ResolvedCommand::Spawn {
+                program,
+                args,
+                cwd,
+                display_path,
+            } => {
+                let cwd = cwd.as_deref().unwrap_or("(inherited)");
+                format!("run '{display_path}' via '{program}' args={args:?} cwd={cwd}")
+            }
+            ResolvedCommand::OpenUrl { url } => format!("open url '{url}'"),
+            ResolvedCommand::OpenPath { path } => format!("open '{path}'"),
+        }
+    }
 }
 
 /// What planning decided to do with one action, before anything runs.
@@ -322,6 +387,9 @@ where
 /// Everything left that genuinely needs the OS or the `AppHandle` — no
 /// branching, no resolution, nothing left worth a unit test.
 fn execute(app: &AppHandle, cmd: &ResolvedCommand) -> Result<(), String> {
+    log::info!("{}", cmd.describe());
+    log::debug!("{}", cmd.describe_verbose());
+
     match cmd {
         ResolvedCommand::Spawn {
             program,
@@ -869,5 +937,94 @@ mod tests {
             ]
         );
         assert_eq!(seen.len(), report.outcomes.len());
+    }
+
+    // ---- describe / describe_verbose (logging redaction contract) ----
+
+    fn spawn_with_secret_arg() -> ResolvedCommand {
+        ResolvedCommand::Spawn {
+            program: "app.exe".to_string(),
+            args: vec!["--token".to_string(), "sekrit-value".to_string()],
+            cwd: Some(r"C:\private\project".to_string()),
+            display_path: "app.exe".to_string(),
+        }
+    }
+
+    #[test]
+    fn describe_never_contains_args_or_cwd() {
+        let cmd = spawn_with_secret_arg();
+        let description = cmd.describe();
+
+        assert!(!description.contains("sekrit-value"));
+        assert!(!description.contains("private"));
+        assert!(description.contains("app.exe"));
+    }
+
+    #[test]
+    fn describe_verbose_contains_args_and_cwd() {
+        let cmd = spawn_with_secret_arg();
+        let description = cmd.describe_verbose();
+
+        assert!(description.contains("sekrit-value"));
+        assert!(description.contains("private"));
+    }
+
+    #[test]
+    fn describe_covers_every_resolved_command_variant() {
+        assert_eq!(
+            ResolvedCommand::OpenUrl {
+                url: "https://example.com".to_string(),
+            }
+            .describe(),
+            "open url 'https://example.com'"
+        );
+        assert_eq!(
+            ResolvedCommand::OpenPath {
+                path: "C:/Shortcuts/App.lnk".to_string(),
+            }
+            .describe(),
+            "open 'C:/Shortcuts/App.lnk'"
+        );
+    }
+
+    // ---- LaunchReport::summary ----
+
+    fn outcome(status: ActionStatus) -> ActionOutcome {
+        ActionOutcome {
+            action_id: Uuid::new_v4().to_string(),
+            label: "Action".to_string(),
+            status,
+            message: None,
+        }
+    }
+
+    #[test]
+    fn summary_of_empty_report_says_no_actions() {
+        let report = LaunchReport { outcomes: vec![] };
+        assert_eq!(report.summary(), "no actions");
+    }
+
+    #[test]
+    fn summary_omits_zero_counts() {
+        let report = LaunchReport {
+            outcomes: vec![
+                outcome(ActionStatus::Started),
+                outcome(ActionStatus::Started),
+            ],
+        };
+        assert_eq!(report.summary(), "2 started");
+    }
+
+    #[test]
+    fn summary_reports_mixed_statuses_in_a_fixed_order() {
+        let report = LaunchReport {
+            outcomes: vec![
+                outcome(ActionStatus::Started),
+                outcome(ActionStatus::Failed),
+                outcome(ActionStatus::Skipped),
+                outcome(ActionStatus::Skipped),
+            ],
+        };
+        assert_eq!(report.summary(), "1 started, 1 failed, 2 skipped");
     }
 }

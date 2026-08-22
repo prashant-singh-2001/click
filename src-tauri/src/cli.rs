@@ -11,7 +11,13 @@ pub fn handle(app: &AppHandle, args: Option<Vec<String>>) {
         Some(argv) => app.cli().matches_from(argv),
         None => app.cli().matches(),
     };
-    let Ok(matches) = result else { return };
+    let matches = match result {
+        Ok(matches) => matches,
+        Err(err) => {
+            log::warn!("failed to parse CLI arguments: {err}");
+            return;
+        }
+    };
 
     if try_launch(app, &matches) {
         return;
@@ -21,22 +27,30 @@ pub fn handle(app: &AppHandle, args: Option<Vec<String>>) {
 
 fn try_launch(app: &AppHandle, matches: &Matches) -> bool {
     let Some(subcommand) = &matches.subcommand else {
+        log::debug!("no CLI subcommand given");
         return false;
     };
     if subcommand.name != "run" {
+        log::debug!("ignoring unrecognized subcommand '{}'", subcommand.name);
         return false;
     }
     let Some(id_arg) = subcommand.matches.args.get("id") else {
+        log::debug!("'run' subcommand invoked without an --id argument");
         return false;
     };
     let Some(id) = id_arg.value.as_str() else {
+        log::debug!("'run' subcommand's --id argument was not a string");
         return false;
     };
 
     let app = app.clone();
     let id = id.to_string();
     tauri::async_runtime::spawn_blocking(move || {
-        let _ = crate::commands::launch_by_id(&app, &id);
+        if let Err(err) =
+            crate::commands::launch_by_id(&app, &id, crate::commands::LaunchTrigger::Cli)
+        {
+            log::error!("CLI launch failed for workspace {id}: {err}");
+        }
     });
     true
 }

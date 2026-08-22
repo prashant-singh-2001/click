@@ -32,4 +32,6 @@ export const api = {
   resumeHotkeys: () => invoke<void>("resume_hotkeys"),
   listInstalledApps: (refresh: boolean) =>
     invoke<InstalledApp[]>("list_installed_apps", { refresh }),
+  logDir: () => invoke<string>("log_dir"),
+  openLogDir: () => invoke<void>("open_log_dir"),
 };

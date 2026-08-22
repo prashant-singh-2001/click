@@ -40,6 +40,7 @@ Starting a dev session means opening the same pile of tools every single time: a
 - **Single instance** — a second launch forwards its command to the running app instead of starting a duplicate.
 - **Local, human-readable config** — one JSON file you can read, diff, and back up.
 - **Validation** — a missing executable path or malformed URL is flagged in the editor before you ever launch.
+- **Local logs** — every launch (from the button, tray, hotkey, or CLI), config load/save outcome, and crash is recorded to a rotating log file, with an **Open logs folder** button in the app.
 
 ## Installation
 
@@ -105,6 +106,16 @@ Example:
 
 Field names are **camelCase**. Variables use `${NAME}` and resolve against the workspace `variables` map first, then process environment variables.
 
+## Diagnostics
+
+Click writes a rotating log to a separate, machine-local folder (not the roaming config dir above, and not synced):
+
+```
+%LOCALAPPDATA%\com.launchpad.app\logs\click.log
+```
+
+It records every launch (which trigger fired it, what ran, and any failure), config load/save outcomes, and crashes. The app has an **Open logs folder** button at the bottom of the window. By default, resolved command-line arguments and working directories are **not** logged — only the target path — since they can carry values pulled from `${VAR}` or your environment. Set `CLICK_LOG=debug` before starting Click to include them when you need to debug an argument-related problem.
+
 ## Development
 
 ### Prerequisites
@@ -150,6 +161,7 @@ The single most important design decision: **the launch engine lives in Rust, no
 | `store.rs` | Load/save `workspaces.json` with atomic writes and a versioned migration hook. |
 | `vars.rs` | `${VAR}` resolution (workspace map → process env). |
 | `launch.rs` | The launch engine: sequential execution, delays, `.cmd`/`.bat` handling, per-action outcomes. |
+| `logging.rs` | Rotating file logger (`tauri-plugin-log`), panic hook, fatal-startup dialog. |
 | `commands.rs` | The `#[tauri::command]` surface (CRUD, validate, launch, shortcut). |
 | `tray.rs` | System-tray icon and menu (rebuilt on every config change). |
 | `hotkeys.rs` | Per-workspace global-shortcut registration. |

@@ -1,13 +1,39 @@
 use crate::hotkeys::HotkeyStatus;
 use crate::installed_apps::{self, InstalledApp};
-use crate::launch::{self, LaunchReport};
+use crate::launch::{self, ActionStatus, LaunchReport};
 use crate::model::{Action, Workspace};
 use crate::store;
 use crate::AppState;
+use std::fmt;
 use std::path::Path;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
+use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
+
+/// Which of the four ways a launch can be triggered fired this one. Logged
+/// alongside every outcome so a report can distinguish "the tray launch
+/// failed" from "the Launch button failed" — before this, three of the four
+/// triggers (tray, hotkey, CLI) discarded the `LaunchReport` entirely and
+/// left no record of success or failure anywhere.
+#[derive(Debug, Clone, Copy)]
+pub enum LaunchTrigger {
+    Ui,
+    Tray,
+    Hotkey,
+    Cli,
+}
+
+impl fmt::Display for LaunchTrigger {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            LaunchTrigger::Ui => "ui",
+            LaunchTrigger::Tray => "tray",
+            LaunchTrigger::Hotkey => "hotkey",
+            LaunchTrigger::Cli => "cli",
+        })
+    }
+}
 
 fn config_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     app.path().app_config_dir().map_err(|e| e.to_string())
@@ -23,6 +49,7 @@ fn persist(app: &AppHandle, state: &State<AppState>) -> Result<(), String> {
         .save_block_reason()
         .map(str::to_string);
     if let Some(reason) = blocked {
+        log::error!("save refused: config load was blocked ({reason})");
         return Err(format!(
             "Click won't save because it couldn't read your existing config \
              and won't risk overwriting it ({reason}). Move or fix that file, \
@@ -40,7 +67,10 @@ fn persist(app: &AppHandle, state: &State<AppState>) -> Result<(), String> {
     // saves could hit disk out of order and need a dedicated save lock.
     let snapshot = state.file.lock().clone();
     let dir = config_dir(app)?;
-    store::save(&dir, &snapshot).map_err(|e| e.to_string())?;
+    if let Err(err) = store::save(&dir, &snapshot) {
+        log::error!("failed to save config: {err}");
+        return Err(err.to_string());
+    }
 
     crate::tray::rebuild(app);
     crate::hotkeys::register_all(app);
@@ -203,16 +233,25 @@ pub fn validate_action(action: Action) -> Option<String> {
 /// worker thread pins it for the sum of every delay (issue #3).
 #[tauri::command]
 pub async fn launch_workspace_by_id(app: AppHandle, id: String) -> Result<LaunchReport, String> {
-    tauri::async_runtime::spawn_blocking(move || launch_by_id(&app, &id))
+    tauri::async_runtime::spawn_blocking(move || launch_by_id(&app, &id, LaunchTrigger::Ui))
         .await
         .map_err(|e| format!("launch task failed: {e}"))?
 }
 
 /// Shared by the `launch_workspace_by_id` command, the tray menu, global
 /// hotkeys, and the CLI's `run` subcommand — every trigger in FR-4 funnels
-/// through this one lookup-then-launch path.
-pub fn launch_by_id(app: &AppHandle, id: &str) -> Result<LaunchReport, String> {
-    let uuid = Uuid::parse_str(id).map_err(|e| e.to_string())?;
+/// through this one lookup-then-launch path, which is why `trigger` is
+/// enough to log a complete picture of every launch regardless of where it
+/// came from.
+pub fn launch_by_id(
+    app: &AppHandle,
+    id: &str,
+    trigger: LaunchTrigger,
+) -> Result<LaunchReport, String> {
+    let uuid = Uuid::parse_str(id).map_err(|e| {
+        log::warn!("launch ({trigger}) requested an invalid workspace id '{id}': {e}");
+        e.to_string()
+    })?;
     let state = app.state::<AppState>();
     let workspace = state
         .file
@@ -221,12 +260,28 @@ pub fn launch_by_id(app: &AppHandle, id: &str) -> Result<LaunchReport, String> {
         .iter()
         .find(|w| w.id == uuid)
         .cloned()
-        .ok_or_else(|| format!("workspace {id} not found"))?;
+        .ok_or_else(|| {
+            log::warn!("launch ({trigger}) requested an unknown workspace {id}");
+            format!("workspace {id} not found")
+        })?;
+
+    log::info!("launch ({trigger}): \"{}\" ({id})", workspace.name);
 
     let app_for_events = app.clone();
     let report = launch::launch_workspace(app, &workspace, move |outcome| {
+        match outcome.status {
+            ActionStatus::Started => log::info!("  started: {}", outcome.label),
+            ActionStatus::Skipped => log::debug!("  skipped: {}", outcome.label),
+            ActionStatus::Failed => log::warn!(
+                "  failed: {} ({})",
+                outcome.label,
+                outcome.message.as_deref().unwrap_or("no error message")
+            ),
+        }
         let _ = app_for_events.emit("launch:progress", outcome);
     });
+
+    log::info!("launch ({trigger}) finished: {}", report.summary());
     Ok(report)
 }
 
@@ -257,7 +312,9 @@ pub fn create_desktop_shortcut(
 /// capture mode; pair with `resume_hotkeys` when capture ends.
 #[tauri::command]
 pub fn suspend_hotkeys(app: AppHandle) {
-    let _ = app.global_shortcut().unregister_all();
+    if let Err(err) = app.global_shortcut().unregister_all() {
+        log::warn!("failed to suspend hotkeys before capture: {err}");
+    }
 }
 
 /// Re-registers every workspace's hotkey from the saved config, undoing
@@ -308,7 +365,37 @@ pub fn hotkey_status(
 pub async fn list_installed_apps(app: AppHandle, refresh: bool) -> Vec<InstalledApp> {
     tauri::async_runtime::spawn_blocking(move || installed_apps::list(&app, refresh))
         .await
-        .unwrap_or_default()
+        .unwrap_or_else(|err| {
+            log::error!("installed-apps scan task panicked: {err}");
+            Vec::new()
+        })
+}
+
+/// The directory Click writes its rotating log file to — a different root
+/// from the config dir (`app_log_dir` vs `app_config_dir`), since logs are
+/// machine-local and must never sync with a roaming profile. Exposed so the
+/// diagnostics footer can show the user where to look without them needing
+/// to already know that.
+#[tauri::command]
+pub fn log_dir(app: AppHandle) -> Result<String, String> {
+    app.path()
+        .app_log_dir()
+        .map(|dir| dir.to_string_lossy().to_string())
+        .map_err(|e| e.to_string())
+}
+
+/// Opens the log folder in Explorer. Rust-side `app.opener()` calls bypass
+/// the IPC capability ACL entirely (confirmed while doing issue #17), so
+/// this needs no new capability grant.
+#[tauri::command]
+pub fn open_log_dir(app: AppHandle) -> Result<(), String> {
+    let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    // The log plugin only creates this on first write, and store::load has
+    // the same "may not exist yet" trap for the config dir on first run.
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    app.opener()
+        .open_path(dir.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
