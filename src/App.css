@@ -388,9 +388,37 @@ textarea {
   border-color: transparent;
 }
 
+.diagnostics-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+.diagnostics-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diagnostics-footer button {
+  flex-shrink: 0;
+  padding: 0.3em 0.6em;
+  font-size: 0.95em;
+}
+
 @media (prefers-color-scheme: dark) {
   .modal {
     background-color: #2f2f2f;
+  }
+
+  .diagnostics-footer {
+    border-color: rgba(255, 255, 255, 0.15);
   }
 }
 

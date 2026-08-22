@@ -3,6 +3,7 @@ mod commands;
 mod hotkeys;
 mod installed_apps;
 mod launch;
+mod logging;
 mod model;
 mod shortcut;
 mod store;
@@ -30,10 +31,21 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        // Must be registered first: plugins run in registration order, and
+    logging::install_panic_hook();
+
+    let result = tauri::Builder::default()
+        // Registered before single_instance: that plugin's own setup hook
+        // calls std::process::exit(0) when it detects a second instance
+        // (after forwarding that instance's argv to the first), so any
+        // plugin registered after it never initializes in the forwarding
+        // process — which is exactly the desktop-shortcut / CLI path this
+        // logging exists to cover. The log plugin is passive (it only
+        // installs a log::Log sink and intercepts nothing), so putting it
+        // first costs nothing single_instance's own ordering needs below.
+        .plugin(logging::builder().build())
+        // Must be registered next: plugins run in registration order, and
         // this one needs to intercept a second launch before anything else
-        // sees it.
+        // (other than logging, above) sees it.
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             cli::handle(app, Some(argv));
         }))
@@ -41,8 +53,31 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_cli::init())
         .setup(|app| {
+            log::info!("click v{} starting", env!("CARGO_PKG_VERSION"));
+
             let config_dir = app.path().app_config_dir()?;
             let loaded = store::load(&config_dir);
+            match &loaded.status {
+                store::LoadStatus::Ok => {
+                    log::info!(
+                        "config loaded: {} workspace(s) from {}",
+                        loaded.file.workspaces.len(),
+                        config_dir.display()
+                    );
+                }
+                store::LoadStatus::Recovered {
+                    backup_path,
+                    reason,
+                } => {
+                    log::warn!(
+                        "config could not be parsed and was quarantined to {backup_path}: {reason}"
+                    );
+                }
+                store::LoadStatus::Blocked { reason } => {
+                    log::error!("config could not be read and saving is disabled: {reason}");
+                }
+            }
+
             app.manage(AppState {
                 file: Mutex::new(loaded.file),
                 config_status: Mutex::new(loaded.status),
@@ -72,6 +107,8 @@ pub fn run() {
             commands::suspend_hotkeys,
             commands::resume_hotkeys,
             commands::list_installed_apps,
+            commands::log_dir,
+            commands::open_log_dir,
         ])
         .on_window_event(|window, event| {
             // Closing the main window hides it into the tray instead of
@@ -79,11 +116,30 @@ pub fn run() {
             // menu is the real exit path.
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                let _ = window.hide();
+                if let Err(err) = window.hide() {
+                    log::warn!("failed to hide main window on close: {err}");
+                }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!());
+
+    match result {
+        Ok(()) => log::info!("click exiting normally"),
+        Err(err) => {
+            // No console exists in a release build (windows_subsystem =
+            // "windows"), so without this a startup failure — an
+            // unresolvable config dir, hotkeys::init or tray::build
+            // erroring — used to just make the app vanish with nothing to
+            // go on anywhere. This is also the one failure the log file
+            // itself can't be trusted to cover: it can happen before the
+            // log plugin's own setup() has attached a logger.
+            let reason = err.to_string();
+            log::error!("fatal startup/runtime error: {reason}");
+            #[cfg(windows)]
+            logging::fatal_startup_dialog(&reason);
+            std::process::exit(1);
+        }
+    }
 }
 
 #[cfg(test)]

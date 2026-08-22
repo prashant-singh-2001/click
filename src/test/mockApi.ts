@@ -17,4 +17,5 @@ export function resetApiMocks() {
   mockedApi.resumeHotkeys.mockResolvedValue(undefined);
   mockedApi.validateAction.mockResolvedValue(null);
   mockedApi.listInstalledApps.mockResolvedValue([]);
+  mockedApi.logDir.mockResolvedValue("C:\\logs");
 }

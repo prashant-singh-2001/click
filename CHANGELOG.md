@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Click now keeps a local log** (NFR-10). Every launch — from the button, the tray, a
+  hotkey, or the CLI/desktop-shortcut path — is recorded with which trigger fired it, what
+  ran, and any failure; so are config load/save outcomes, hotkey registration results, and
+  crashes. Previously none of this existed anywhere: the app had zero diagnostic output, three
+  of the four launch triggers discarded their result entirely, and a startup failure just made
+  the app vanish with no console to show it (release builds have none). A fatal startup error
+  now shows a native dialog naming the reason, since that one failure can happen before the
+  logger itself is even attached. The log lives at
+  `%LOCALAPPDATA%\com.launchpad.app\logs\click.log` (rotated, one previous file kept), with an
+  **Open logs folder** button in the app. Resolved command-line arguments and working
+  directories — which can carry a `${VAR}`-resolved secret — are never written by default;
+  set `CLICK_LOG=debug` to include them. ([#6])
+
 ### Fixed
 
 - **App actions can now target a shortcut, installer, or document, not just an `.exe`.**
@@ -183,6 +198,7 @@ development environment from a single named workspace.
 [0.1.0]: https://github.com/prashant-singh-2001/click/releases/tag/v0.1.0
 [#3]: https://github.com/prashant-singh-2001/click/issues/3
 [#4]: https://github.com/prashant-singh-2001/click/issues/4
+[#6]: https://github.com/prashant-singh-2001/click/issues/6
 [#10]: https://github.com/prashant-singh-2001/click/issues/10
 [#16]: https://github.com/prashant-singh-2001/click/issues/16
 [#17]: https://github.com/prashant-singh-2001/click/issues/17

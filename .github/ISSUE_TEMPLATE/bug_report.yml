@@ -29,8 +29,11 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: Error message / output
-      description: Paste any error text shown in the app or terminal. This will be rendered as code.
+      label: Error message / logs
+      description: |
+        Paste any error text shown in the app, plus the relevant lines from Click's log file if you can.
+        The app has an "Open logs folder" button; the file is at `%LOCALAPPDATA%\com.launchpad.app\logs\click.log`.
+        This will be rendered as code.
       render: shell
     validations:
       required: false

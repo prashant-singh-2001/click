@@ -54,17 +54,29 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 /// Called after any workspace list mutation so the tray never serves a
 /// stale menu (a saved rename or a new workspace must show up immediately).
 pub fn rebuild(app: &AppHandle) {
-    if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        if let Ok(menu) = build_menu(app) {
-            let _ = tray.set_menu(Some(menu));
+    let Some(tray) = app.tray_by_id(TRAY_ID) else {
+        log::warn!("tray rebuild skipped: tray icon not found");
+        return;
+    };
+    let menu = match build_menu(app) {
+        Ok(menu) => menu,
+        Err(err) => {
+            log::warn!("tray menu rebuild failed, the stale menu is still showing: {err}");
+            return;
         }
+    };
+    if let Err(err) = tray.set_menu(Some(menu)) {
+        log::warn!("failed to apply the rebuilt tray menu: {err}");
     }
 }
 
 fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
     let id = event.id.as_ref();
     match id {
-        "quit" => app.exit(0),
+        "quit" => {
+            log::info!("exiting via tray Quit");
+            app.exit(0);
+        }
         "open" => {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
@@ -75,7 +87,13 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
             let workspace_id = other.trim_start_matches("launch:").to_string();
             let app = app.clone();
             tauri::async_runtime::spawn_blocking(move || {
-                let _ = crate::commands::launch_by_id(&app, &workspace_id);
+                if let Err(err) = crate::commands::launch_by_id(
+                    &app,
+                    &workspace_id,
+                    crate::commands::LaunchTrigger::Tray,
+                ) {
+                    log::error!("tray launch failed for workspace {workspace_id}: {err}");
+                }
             });
         }
         _ => {}

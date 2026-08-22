@@ -32,6 +32,7 @@ Consequences to be aware of:
   - **SEC-1** — importing a config shows exactly what it will run and requires explicit confirmation before the first launch; imported configs are never executed silently.
   - **SEC-2** — a dry-run/preview that lists every command, path, and argument without executing anything.
 - **Secrets** should not be stored in plaintext config. Prefer `${VAR}` variables that resolve from your environment over hard-coding credentials into a workspace.
+- **The local log file** (`%LOCALAPPDATA%\com.launchpad.app\logs\click.log`) records the target path of every action launched, but not resolved command-line arguments or working directories — those can carry a `${VAR}`-resolved secret, so they're only written when you explicitly opt in via `CLICK_LOG=debug`. Keep that in mind before attaching a debug-level log to a bug report.
 
 ## Unsigned builds
 
