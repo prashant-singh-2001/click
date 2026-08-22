@@ -60,6 +60,13 @@ pub enum ResolvedCommand {
     OpenUrl {
         url: String,
     },
+    /// A `.lnk`, `.msi`, or a document — handed to the OS shell so it opens
+    /// exactly as double-clicking it would (issue #17). Never carries args
+    /// or a cwd: the opener API has no channel for either, so a target that
+    /// needs them is rejected in `resolve_app` before this variant exists.
+    OpenPath {
+        path: String,
+    },
 }
 
 /// What planning decided to do with one action, before anything runs.
@@ -164,6 +171,39 @@ fn resolve_action(
     }
 }
 
+/// How a resolved path should be launched, based on its extension alone.
+/// Shared between `resolve_app` (decides how to build the plan) and
+/// `commands::validate_action` (warns in the editor before the same problem
+/// would surface as a launch failure) — one rule, not two copies that could
+/// drift apart.
+pub(crate) enum Route {
+    /// `Command::new` can spawn it directly. Extensionless counts —
+    /// `CreateProcess` appends `.exe` on Windows — and so does `.com`.
+    Native,
+    /// `code`, `npm`, and similar dev-tool shims on Windows are `.cmd`/`.bat`
+    /// files, not native executables — `Command::new` cannot spawn them
+    /// directly and fails with an opaque OS error, so route through `cmd /C`.
+    /// Unlike `Shell`, this preserves args and cwd.
+    Script,
+    /// A `.lnk`, `.msi`, or a document — nothing `Command::new` can run.
+    /// Handed to the OS shell instead, matching what double-clicking it does
+    /// (issue #17). The shell-open API has no channel for args or a cwd.
+    Shell,
+}
+
+pub(crate) fn route_for(path: &str) -> Route {
+    match Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("cmd") | Some("bat") => Route::Script,
+        None | Some("exe") | Some("com") => Route::Native,
+        Some(_) => Route::Shell,
+    }
+}
+
 fn resolve_app(
     path: &str,
     args: &[String],
@@ -181,31 +221,36 @@ fn resolve_app(
         .transpose()
         .map_err(|e| e.to_string())?;
 
-    // `code`, `npm`, and similar dev-tool shims on Windows are .cmd/.bat
-    // files, not native executables — Command::new() cannot spawn them
-    // directly and fails with an opaque OS error, so route through cmd /C.
-    let is_script = matches!(
-        Path::new(&resolved_path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_ascii_lowercase()),
-        Some(ext) if ext == "cmd" || ext == "bat"
-    );
-
-    let (program, args) = if is_script {
-        let mut cmd_args = vec!["/C".to_string(), resolved_path.clone()];
-        cmd_args.extend(resolved_args);
-        ("cmd".to_string(), cmd_args)
-    } else {
-        (resolved_path.clone(), resolved_args)
-    };
-
-    Ok(ResolvedCommand::Spawn {
-        program,
-        args,
-        cwd: resolved_cwd,
-        display_path: resolved_path,
-    })
+    match route_for(&resolved_path) {
+        Route::Shell => {
+            if !resolved_args.is_empty() || resolved_cwd.is_some() {
+                return Err(format!(
+                    "'{resolved_path}' isn't a program Windows can run directly, so it opens \
+                     with its associated app — which can't accept arguments or a working \
+                     directory. Remove them, or point this action at the .exe."
+                ));
+            }
+            Ok(ResolvedCommand::OpenPath {
+                path: resolved_path,
+            })
+        }
+        Route::Script => {
+            let mut cmd_args = vec!["/C".to_string(), resolved_path.clone()];
+            cmd_args.extend(resolved_args);
+            Ok(ResolvedCommand::Spawn {
+                program: "cmd".to_string(),
+                args: cmd_args,
+                cwd: resolved_cwd,
+                display_path: resolved_path,
+            })
+        }
+        Route::Native => Ok(ResolvedCommand::Spawn {
+            program: resolved_path.clone(),
+            args: resolved_args,
+            cwd: resolved_cwd,
+            display_path: resolved_path,
+        }),
+    }
 }
 
 fn resolve_url(url: &str, variables: &HashMap<String, String>) -> Result<ResolvedCommand, String> {
@@ -303,6 +348,10 @@ fn execute(app: &AppHandle, cmd: &ResolvedCommand) -> Result<(), String> {
             .opener()
             .open_url(url, None::<&str>)
             .map_err(|e| format!("failed to open '{}': {}", url, e)),
+        ResolvedCommand::OpenPath { path } => app
+            .opener()
+            .open_path(path, None::<&str>)
+            .map_err(|e| format!("failed to open '{}': {}", path, e)),
     }
 }
 
@@ -512,6 +561,114 @@ mod tests {
             }
             other => panic!("expected Run(Spawn), got {other:?}"),
         }
+    }
+
+    #[test]
+    fn com_extension_spawns_directly_not_through_cmd() {
+        let action = app_action("C:/tools/legacy.com", vec![], true);
+        let ws = workspace_with(vec![action]);
+
+        let plan = plan_workspace(&ws);
+
+        match &plan[0].step {
+            PlannedStep::Run(ResolvedCommand::Spawn { program, .. }) => {
+                assert_eq!(program, "C:/tools/legacy.com");
+            }
+            other => panic!("expected Run(Spawn), got {other:?}"),
+        }
+    }
+
+    // ---- issue #17: .lnk / .msi / documents route through the shell ----
+
+    #[test]
+    fn lnk_extension_opens_through_the_shell() {
+        let action = app_action("C:/Users/me/Desktop/App.lnk", vec![], true);
+        let ws = workspace_with(vec![action]);
+
+        let plan = plan_workspace(&ws);
+
+        assert_eq!(
+            plan[0].step,
+            PlannedStep::Run(ResolvedCommand::OpenPath {
+                path: "C:/Users/me/Desktop/App.lnk".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn msi_extension_opens_through_the_shell() {
+        let action = app_action("C:/downloads/installer.msi", vec![], true);
+        let ws = workspace_with(vec![action]);
+
+        let plan = plan_workspace(&ws);
+
+        assert_eq!(
+            plan[0].step,
+            PlannedStep::Run(ResolvedCommand::OpenPath {
+                path: "C:/downloads/installer.msi".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn document_extension_opens_through_the_shell() {
+        let action = app_action("C:/notes/todo.docx", vec![], true);
+        let ws = workspace_with(vec![action]);
+
+        let plan = plan_workspace(&ws);
+
+        assert_eq!(
+            plan[0].step,
+            PlannedStep::Run(ResolvedCommand::OpenPath {
+                path: "C:/notes/todo.docx".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn shell_routing_is_case_insensitive() {
+        let action = app_action("C:/Users/me/Desktop/App.LNK", vec![], true);
+        let ws = workspace_with(vec![action]);
+
+        let plan = plan_workspace(&ws);
+
+        assert!(matches!(
+            &plan[0].step,
+            PlannedStep::Run(ResolvedCommand::OpenPath { .. })
+        ));
+    }
+
+    #[test]
+    fn args_on_a_shell_routed_target_fail_to_resolve_naming_the_path() {
+        let action = app_action("C:/Users/me/Desktop/App.lnk", vec!["some-arg"], true);
+        let ws = workspace_with(vec![action]);
+
+        let plan = plan_workspace(&ws);
+
+        match &plan[0].step {
+            PlannedStep::Unresolved(message) => {
+                assert!(message.contains("App.lnk"), "message was: {message}");
+            }
+            other => panic!("expected Unresolved, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn cwd_on_a_shell_routed_target_fails_to_resolve() {
+        let action = Action::App {
+            id: Uuid::new_v4(),
+            label: "App".to_string(),
+            path: "C:/Users/me/Desktop/App.lnk".to_string(),
+            args: vec![],
+            cwd: Some("C:/Users/me".to_string()),
+            enabled: true,
+            delay_after_ms: None,
+        };
+        let ws = workspace_with(vec![action]);
+
+        let plan = plan_workspace(&ws);
+
+        assert!(matches!(&plan[0].step, PlannedStep::Unresolved(_)));
     }
 
     #[test]

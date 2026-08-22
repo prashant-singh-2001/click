@@ -77,7 +77,7 @@ export function ActionEditor({
               className="field-grow"
               value={action.path}
               onChange={(e) => onChange({ ...action, path: e.currentTarget.value })}
-              placeholder="Executable path, e.g. C:/Program Files/.../app.exe"
+              placeholder="Path to an app, shortcut, or document, e.g. C:/Program Files/.../app.exe"
             />
             <button
               type="button"

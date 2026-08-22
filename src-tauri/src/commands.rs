@@ -158,18 +158,29 @@ pub fn duplicate_workspace(
     Ok(duplicate)
 }
 
-/// FR-7.1: flags a missing app path or a URL without a scheme. Never
-/// blocks saving — the path may legitimately not exist on this machine yet.
+/// FR-7.1: flags a missing app path, a URL without a scheme, or args/cwd on
+/// a target that can't accept them (issue #17 — see `launch::route_for`).
+/// Never blocks saving — the path may legitimately not exist on this
+/// machine yet.
 #[tauri::command]
 pub fn validate_action(action: Action) -> Option<String> {
     match action {
-        Action::App { path, .. } => {
+        Action::App {
+            path, args, cwd, ..
+        } => {
             if path.trim().is_empty() {
                 Some("path is empty".to_string())
             } else if path.contains("${") {
                 None // contains a variable; can't validate until launch time
             } else if !Path::new(&path).exists() {
                 Some(format!("path does not exist: {path}"))
+            } else if matches!(launch::route_for(&path), launch::Route::Shell)
+                && (!args.is_empty() || cwd.is_some())
+            {
+                Some(format!(
+                    "'{path}' opens with its associated app, which can't accept arguments or \
+                     a working directory"
+                ))
             } else {
                 None
             }
@@ -379,5 +390,86 @@ mod tests {
 
         assert_eq!(workspaces.len(), 1);
         assert_eq!(workspaces[0].name, "A restored");
+    }
+
+    // ---- validate_action: issue #17 args/cwd-on-a-shell-target warning ----
+    // `Path::exists()` must be true to reach that check at all, so these use
+    // real files on disk — same fixture pattern as installed_apps.rs.
+
+    struct Fixture {
+        dir: std::path::PathBuf,
+    }
+
+    impl Fixture {
+        fn new(test_name: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!("click-commands-test-{test_name}"));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            Fixture { dir }
+        }
+
+        fn touch(&self, filename: &str) -> String {
+            let path = self.dir.join(filename);
+            std::fs::write(&path, b"").unwrap();
+            path.to_string_lossy().to_string()
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    fn app_action(path: String, args: Vec<&str>, cwd: Option<&str>) -> Action {
+        Action::App {
+            id: Uuid::new_v4(),
+            label: "App".to_string(),
+            path,
+            args: args.into_iter().map(String::from).collect(),
+            cwd: cwd.map(String::from),
+            enabled: true,
+            delay_after_ms: None,
+        }
+    }
+
+    #[test]
+    fn warns_when_a_shell_routed_target_has_args() {
+        let fx = Fixture::new("warns_when_a_shell_routed_target_has_args");
+        let target = fx.touch("Shortcut.lnk");
+
+        let warning = validate_action(app_action(target, vec!["some-arg"], None));
+
+        assert!(warning.is_some());
+    }
+
+    #[test]
+    fn warns_when_a_shell_routed_target_has_a_cwd() {
+        let fx = Fixture::new("warns_when_a_shell_routed_target_has_a_cwd");
+        let target = fx.touch("installer.msi");
+
+        let warning = validate_action(app_action(target, vec![], Some("C:/Users/me")));
+
+        assert!(warning.is_some());
+    }
+
+    #[test]
+    fn stays_silent_for_a_shell_routed_target_with_no_args_or_cwd() {
+        let fx = Fixture::new("stays_silent_for_a_shell_routed_target_with_no_args_or_cwd");
+        let target = fx.touch("Shortcut.lnk");
+
+        let warning = validate_action(app_action(target, vec![], None));
+
+        assert_eq!(warning, None);
+    }
+
+    #[test]
+    fn stays_silent_for_args_on_a_native_exe() {
+        let fx = Fixture::new("stays_silent_for_args_on_a_native_exe");
+        let target = fx.touch("app.exe");
+
+        let warning = validate_action(app_action(target, vec!["some-arg"], Some("C:/Users/me")));
+
+        assert_eq!(warning, None);
     }
 }
