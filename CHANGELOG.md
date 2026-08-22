@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **App actions can now target a shortcut, installer, or document, not just an `.exe`.**
+  Only `.cmd`/`.bat` were special-cased; anything else that wasn't a native executable
+  (`.lnk`, `.msi`, a `.docx`) failed at launch with an opaque OS error, even though the file
+  dialog let you pick it and validation happily accepted it. These now open through the OS
+  shell instead — the same as double-clicking the file. One tradeoff: a shell-opened target
+  can't carry arguments or a working directory (there's no channel for either), so the
+  editor now warns if you set them on one, instead of the launch silently failing later. The
+  installed-apps picker (#32) no longer hides non-`.exe` Start Menu entries, since the
+  reason it did — the launch engine couldn't open them — is what this fixes. ([#17])
+
 ## [0.2.4] — 2026-08-20
 
 ### Added
@@ -173,6 +185,7 @@ development environment from a single named workspace.
 [#4]: https://github.com/prashant-singh-2001/click/issues/4
 [#10]: https://github.com/prashant-singh-2001/click/issues/10
 [#16]: https://github.com/prashant-singh-2001/click/issues/16
+[#17]: https://github.com/prashant-singh-2001/click/issues/17
 [#7]: https://github.com/prashant-singh-2001/click/issues/7
 [#13]: https://github.com/prashant-singh-2001/click/issues/13
 [#18]: https://github.com/prashant-singh-2001/click/issues/18

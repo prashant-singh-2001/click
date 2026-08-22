@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
 /// One entry in the installed-apps picker (issue #32). `path` is always a
-/// resolved `.exe`, never a `.lnk` — launching a shortcut directly isn't
-/// supported by the launch engine (issue #17), so resolution happens once
-/// here rather than at every launch.
+/// resolved target, never a `.lnk` itself — resolution happens once here
+/// rather than at every launch. The launch engine can now open non-`.exe`
+/// targets directly (issue #17), so this is no longer restricted to `.exe`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstalledApp {
@@ -78,17 +78,13 @@ fn walk_lnk_files(dir: &Path, out: &mut Vec<PathBuf>) {
 fn filter_and_dedup(mut apps: Vec<(String, String)>) -> Vec<InstalledApp> {
     apps.retain(|(name, target)| {
         let target_path = Path::new(target);
-        let is_exe = target_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .is_some_and(|e| e.eq_ignore_ascii_case("exe"));
         let looks_like_uninstaller = name.to_ascii_lowercase().contains("uninstall")
             || target_path
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .is_some_and(|s| s.to_ascii_lowercase().starts_with("unins"));
 
-        is_exe && !looks_like_uninstaller && target_path.exists()
+        !looks_like_uninstaller && target_path.exists()
     });
 
     // Dedupe by resolved path (case-insensitive — Windows paths are), keeping
@@ -282,11 +278,14 @@ mod tests {
         assert_eq!(apps[0].name, "VS Code");
     }
 
+    // Issue #17: the launch engine can now open non-.exe targets directly
+    // (shortcuts, documents), so the picker no longer needs to hide them.
     #[test]
-    fn drops_non_exe_targets() {
-        let fx = Fixture::new("drops_non_exe_targets");
+    fn keeps_non_exe_targets() {
+        let fx = Fixture::new("keeps_non_exe_targets");
         let apps = filter_and_dedup(vec![("Readme".to_string(), fx.touch("readme.txt"))]);
-        assert!(apps.is_empty());
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].name, "Readme");
     }
 
     #[test]

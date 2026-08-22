@@ -50,7 +50,7 @@ describe("ActionEditor", () => {
       />,
     );
 
-    expect(screen.getByPlaceholderText(/executable path/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/path to an app, shortcut, or document/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/arguments/i)).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/example.com/i)).not.toBeInTheDocument();
   });
