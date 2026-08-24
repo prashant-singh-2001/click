@@ -161,6 +161,25 @@ textarea {
   font-size: 0.9em;
 }
 
+/* Shows what the args field's quote-aware parser actually produced (issue
+   #8), so a mis-quoted argument is visible before launch rather than only
+   discoverable when it misbehaves. */
+.args-preview {
+  font-size: 0.85em;
+  opacity: 0.75;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.args-preview-item {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  background-color: rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+}
+
 .editor-actions {
   margin-top: 1.5rem;
 }
@@ -458,5 +477,9 @@ textarea {
   .tag-chip {
     background-color: rgba(120, 158, 236, 0.18);
     color: #a9c4f5;
+  }
+
+  .args-preview-item {
+    background-color: rgba(255, 255, 255, 0.1);
   }
 }

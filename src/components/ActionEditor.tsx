@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
+import { parseArgs, formatArgs } from "../args";
 import type { Action, InstalledApp } from "../types";
 import { DEFAULT_APP_LABEL } from "../types";
 import { AppPicker } from "./AppPicker";
@@ -20,10 +21,27 @@ export function ActionEditor({
 }) {
   const [warning, setWarning] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Local text, not derived from action.args on every render — deriving it
+  // ate whitespace and moved the caret mid-typing (issue #8), since the
+  // field's value would immediately re-render from the parsed-and-rejoined
+  // array. Safe to seed once: ActionEditor is the sole writer of args in the
+  // whole frontend, and WorkspaceEditor keys this component by action.id, so
+  // a genuinely different action always remounts with a fresh initializer
+  // rather than reusing this state.
+  const [argsText, setArgsText] = useState(() =>
+    action.type === "app" ? formatArgs(action.args) : "",
+  );
 
   useEffect(() => {
     api.validateAction(action).then(setWarning).catch(console.error);
   }, [action]);
+
+  function handleArgsChange(text: string) {
+    setArgsText(text);
+    if (action.type === "app") {
+      onChange({ ...action, args: parseArgs(text) });
+    }
+  }
 
   function handlePickApp(app: InstalledApp) {
     setPickerOpen(false);
@@ -95,15 +113,21 @@ export function ActionEditor({
             </button>
           </div>
           <input
-            value={action.args.join(" ")}
-            onChange={(e) =>
-              onChange({
-                ...action,
-                args: e.currentTarget.value.split(" ").filter((a) => a.length > 0),
-              })
-            }
-            placeholder="Arguments, e.g. ${PROJECT_DIR}"
+            value={argsText}
+            onChange={(e) => handleArgsChange(e.currentTarget.value)}
+            placeholder='Arguments, e.g. --dir "${PROJECT_DIR}"'
+            aria-label="Arguments"
           />
+          {action.args.length > 0 && (
+            <div className="args-preview">
+              Parses to {action.args.length} argument{action.args.length === 1 ? "" : "s"}:{" "}
+              {action.args.map((arg, i) => (
+                <code className="args-preview-item" key={i}>
+                  {arg}
+                </code>
+              ))}
+            </div>
+          )}
           <input
             value={action.cwd ?? ""}
             onChange={(e) => onChange({ ...action, cwd: e.currentTarget.value || null })}
