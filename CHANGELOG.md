@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Command-line arguments can now contain spaces.** The args field used to render as
+  `action.args.join(" ")` and parse keystrokes back with `.split(" ")`, so a quoted path like
+  `--dir "C:/My Project"` was impossible to express, and `["a","b"]` was indistinguishable
+  from `["a b"]` once typed. The field now uses a quote-aware parser (`"..."` groups; `""`
+  inside quotes is one literal quote; backslash is always literal, so `C:\My Project\` needs
+  no escaping) and a live preview of the parsed arguments underneath. Fixing this exposed a
+  second, previously unreachable bug: routing a `.cmd`/`.bat` shim through `cmd /C` used
+  `Command::args`, which applies C-runtime quoting — the wrong dialect for a command line
+  `cmd.exe` itself parses. A spacey script path (`C:\Program Files\nodejs\npm.cmd`) plus a
+  spacey argument now builds its own cmd-dialect command line and passes it via `raw_arg`
+  with a forced `/S`, rather than relying on cmd's own quote-counting heuristic. ([#8])
 - **App actions can now target a shortcut, installer, or document, not just an `.exe`.**
   Only `.cmd`/`.bat` were special-cased; anything else that wasn't a native executable
   (`.lnk`, `.msi`, a `.docx`) failed at launch with an opaque OS error, even though the file
@@ -199,6 +210,7 @@ development environment from a single named workspace.
 [#3]: https://github.com/prashant-singh-2001/click/issues/3
 [#4]: https://github.com/prashant-singh-2001/click/issues/4
 [#6]: https://github.com/prashant-singh-2001/click/issues/6
+[#8]: https://github.com/prashant-singh-2001/click/issues/8
 [#10]: https://github.com/prashant-singh-2001/click/issues/10
 [#16]: https://github.com/prashant-singh-2001/click/issues/16
 [#17]: https://github.com/prashant-singh-2001/click/issues/17

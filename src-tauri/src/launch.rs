@@ -77,15 +77,15 @@ impl LaunchReport {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResolvedCommand {
     Spawn {
-        /// What `Command::new()` actually targets — `"cmd"` when routed
-        /// through a `.cmd`/`.bat` shim, the resolved path otherwise.
+        /// A native executable — `Route::Native` is the only route that
+        /// produces this variant. `.cmd`/`.bat` shims are `RunScript`, and
+        /// non-native targets are `OpenPath` — see those variants.
         program: String,
         args: Vec<String>,
         cwd: Option<String>,
-        /// The action's resolved target path, used only in error messages —
-        /// always the original path, even when spawning goes through the
-        /// `cmd /C` shim, so a failure is attributed to the script rather
-        /// than to `cmd` itself.
+        /// Same as `program` — kept as a separate field only because
+        /// `describe`/`describe_verbose` and error messages read more
+        /// clearly naming "the target" than naming "the program".
         display_path: String,
     },
     OpenUrl {
@@ -98,6 +98,19 @@ pub enum ResolvedCommand {
     OpenPath {
         path: String,
     },
+    /// A `.cmd`/`.bat` run through `cmd.exe`. Separate from `Spawn` because
+    /// cmd does not use C-runtime command-line quoting, so `Command::args`
+    /// — which does — produces the wrong dialect (issue #8): a spacey
+    /// script path plus a spacey argument produces four quote characters,
+    /// which cmd's own "preserve vs. strip" heuristic mangles. The command
+    /// line is built by `cmd_command_line` and passed via `raw_arg` with a
+    /// forced `/S` in `execute`, which removes that heuristic entirely
+    /// rather than trying to stay on its lucky side.
+    RunScript {
+        script: String,
+        args: Vec<String>,
+        cwd: Option<String>,
+    },
 }
 
 impl ResolvedCommand {
@@ -109,6 +122,7 @@ impl ResolvedCommand {
             ResolvedCommand::Spawn { display_path, .. } => format!("run '{display_path}'"),
             ResolvedCommand::OpenUrl { url } => format!("open url '{url}'"),
             ResolvedCommand::OpenPath { path } => format!("open '{path}'"),
+            ResolvedCommand::RunScript { script, .. } => format!("run '{script}'"),
         }
     }
 
@@ -130,8 +144,30 @@ impl ResolvedCommand {
             }
             ResolvedCommand::OpenUrl { url } => format!("open url '{url}'"),
             ResolvedCommand::OpenPath { path } => format!("open '{path}'"),
+            ResolvedCommand::RunScript { script, args, cwd } => {
+                let cwd = cwd.as_deref().unwrap_or("(inherited)");
+                format!("run '{script}' via cmd args={args:?} cwd={cwd}")
+            }
         }
     }
+}
+
+/// Builds the single string handed to `cmd /S /C` (see `RunScript`). Every
+/// element is quoted unconditionally, not just when it contains a space —
+/// quotes are also what protects `& | < > ( ) ^` from cmd's own parser, so
+/// this is the injection boundary (SEC-1) as well as the spaces fix. An
+/// embedded `"` in an argument is doubled as a best effort; cmd has no
+/// clean per-argument escape for it, so this is not guaranteed to survive
+/// a literal quote inside an argument (see the plan/PR for that limitation).
+fn cmd_command_line(script: &str, args: &[String]) -> String {
+    let mut parts = Vec::with_capacity(args.len() + 1);
+    parts.push(quote_for_cmd(script));
+    parts.extend(args.iter().map(|a| quote_for_cmd(a)));
+    parts.join(" ")
+}
+
+fn quote_for_cmd(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\"\""))
 }
 
 /// What planning decided to do with one action, before anything runs.
@@ -299,16 +335,11 @@ fn resolve_app(
                 path: resolved_path,
             })
         }
-        Route::Script => {
-            let mut cmd_args = vec!["/C".to_string(), resolved_path.clone()];
-            cmd_args.extend(resolved_args);
-            Ok(ResolvedCommand::Spawn {
-                program: "cmd".to_string(),
-                args: cmd_args,
-                cwd: resolved_cwd,
-                display_path: resolved_path,
-            })
-        }
+        Route::Script => Ok(ResolvedCommand::RunScript {
+            script: resolved_path,
+            args: resolved_args,
+            cwd: resolved_cwd,
+        }),
         Route::Native => Ok(ResolvedCommand::Spawn {
             program: resolved_path.clone(),
             args: resolved_args,
@@ -420,6 +451,36 @@ fn execute(app: &AppHandle, cmd: &ResolvedCommand) -> Result<(), String> {
             .opener()
             .open_path(path, None::<&str>)
             .map_err(|e| format!("failed to open '{}': {}", path, e)),
+        ResolvedCommand::RunScript { script, args, cwd } => {
+            let mut command = Command::new("cmd");
+
+            #[cfg(windows)]
+            {
+                // /S makes cmd strip exactly the outer quote pair
+                // cmd_command_line wraps everything in, regardless of how
+                // many quotes the arguments themselves contain — see
+                // ResolvedCommand::RunScript. raw_arg bypasses std's
+                // C-runtime quoting, the wrong dialect for a command line
+                // cmd.exe is going to parse, not a C runtime.
+                command.raw_arg("/S");
+                command.raw_arg("/C");
+                command.raw_arg(format!("\"{}\"", cmd_command_line(script, args)));
+                command.creation_flags(CREATE_NO_WINDOW);
+            }
+            #[cfg(not(windows))]
+            {
+                command.arg("/C").arg(script).args(args);
+            }
+
+            if let Some(dir) = cwd {
+                command.current_dir(dir);
+            }
+
+            command
+                .spawn()
+                .map(|_child| ())
+                .map_err(|e| format!("failed to launch '{}': {}", script, e))
+        }
     }
 }
 
@@ -559,19 +620,11 @@ mod tests {
         let plan = plan_workspace(&ws);
 
         match &plan[0].step {
-            PlannedStep::Run(ResolvedCommand::Spawn { program, args, .. }) => {
-                assert_eq!(program, "cmd");
-                assert_eq!(
-                    args,
-                    &vec![
-                        "/C".to_string(),
-                        "C:/tools/code.cmd".to_string(),
-                        "arg1".to_string(),
-                        "arg2".to_string(),
-                    ]
-                );
+            PlannedStep::Run(ResolvedCommand::RunScript { script, args, .. }) => {
+                assert_eq!(script, "C:/tools/code.cmd");
+                assert_eq!(args, &vec!["arg1".to_string(), "arg2".to_string()]);
             }
-            other => panic!("expected Run(Spawn), got {other:?}"),
+            other => panic!("expected Run(RunScript), got {other:?}"),
         }
     }
 
@@ -584,7 +637,7 @@ mod tests {
 
         assert!(matches!(
             &plan[0].step,
-            PlannedStep::Run(ResolvedCommand::Spawn { program, .. }) if program == "cmd"
+            PlannedStep::Run(ResolvedCommand::RunScript { script, .. }) if script == "C:/tools/legacy.bat"
         ));
     }
 
@@ -597,7 +650,7 @@ mod tests {
 
         assert!(matches!(
             &plan[0].step,
-            PlannedStep::Run(ResolvedCommand::Spawn { program, .. }) if program == "cmd"
+            PlannedStep::Run(ResolvedCommand::RunScript { script, .. }) if script == "C:/tools/code.CMD"
         ));
     }
 
@@ -970,6 +1023,24 @@ mod tests {
     }
 
     #[test]
+    fn run_script_describe_never_contains_args_or_cwd() {
+        let cmd = ResolvedCommand::RunScript {
+            script: "C:/tools/deploy.cmd".to_string(),
+            args: vec!["--token".to_string(), "sekrit-value".to_string()],
+            cwd: Some(r"C:\private\project".to_string()),
+        };
+
+        let description = cmd.describe();
+        assert!(!description.contains("sekrit-value"));
+        assert!(!description.contains("private"));
+        assert!(description.contains("deploy.cmd"));
+
+        let verbose = cmd.describe_verbose();
+        assert!(verbose.contains("sekrit-value"));
+        assert!(verbose.contains("private"));
+    }
+
+    #[test]
     fn describe_covers_every_resolved_command_variant() {
         assert_eq!(
             ResolvedCommand::OpenUrl {
@@ -985,6 +1056,96 @@ mod tests {
             .describe(),
             "open 'C:/Shortcuts/App.lnk'"
         );
+    }
+
+    // ---- cmd_command_line (issue #8: cmd's quoting dialect, not std's) ----
+
+    #[test]
+    fn cmd_command_line_quotes_a_spacey_script_and_a_spacey_arg() {
+        let line = cmd_command_line(
+            r"C:\Program Files\nodejs\npm.cmd",
+            &["C:/My Project".to_string()],
+        );
+        assert_eq!(line, r#""C:\Program Files\nodejs\npm.cmd" "C:/My Project""#);
+    }
+
+    #[test]
+    fn cmd_command_line_quotes_metacharacters_even_without_a_space() {
+        // No space, but `&` would otherwise be interpreted by cmd's parser
+        // as a command separator (SEC-1) — quoting must not be conditional
+        // on whitespace alone.
+        let line = cmd_command_line("run.cmd", &["a&calc".to_string()]);
+        assert_eq!(line, r#""run.cmd" "a&calc""#);
+    }
+
+    #[test]
+    fn cmd_command_line_with_no_args_quotes_only_the_script() {
+        let line = cmd_command_line("run.cmd", &[]);
+        assert_eq!(line, r#""run.cmd""#);
+    }
+
+    #[test]
+    fn cmd_command_line_quotes_an_empty_argument() {
+        let line = cmd_command_line("run.cmd", &["".to_string()]);
+        assert_eq!(line, r#""run.cmd" """#);
+    }
+
+    /// Spawns a REAL cmd.exe against a REAL .cmd file at a path containing a
+    /// space, with a REAL argument containing a space — proving the
+    /// quoting this module builds actually survives cmd's own command-line
+    /// parsing, not just that we produced *a* string (issue #8). Mirrors
+    /// the precedent in `shortcut.rs`/`installed_apps.rs` of exercising the
+    /// real OS rather than asserting only on our own intermediate
+    /// representation — neither Rust's exact `raw_arg` behavior nor cmd's
+    /// own quote-counting rule is pinned anywhere else in this repo.
+    #[cfg(windows)]
+    #[test]
+    fn cmd_quoting_survives_a_real_cmd_exe_round_trip() {
+        let dir = std::env::temp_dir().join("click launch cmd quoting test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let script_path = dir.join("echo args.cmd");
+        let out_path = dir.join("out.txt");
+        // %~1 strips %1's surrounding quotes (batch files receive %1 with
+        // them still attached — confirmed empirically while writing this
+        // test, which first asserted the wrong thing). %2 must stay empty:
+        // that's the actual property under test — a spacey argument must
+        // arrive as ONE token, not split at the space into %1 and %2.
+        std::fs::write(
+            &script_path,
+            format!(
+                "@echo %~1>\"{out}\"\r\n@echo [%2]>>\"{out}\"\r\n",
+                out = out_path.display()
+            ),
+        )
+        .unwrap();
+
+        let script = script_path.to_string_lossy().to_string();
+        let args = vec!["C:/My Project".to_string()];
+        let line = cmd_command_line(&script, &args);
+
+        let mut command = Command::new("cmd");
+        command.raw_arg("/S");
+        command.raw_arg("/C");
+        command.raw_arg(format!("\"{line}\""));
+        let status = command.status().expect("cmd.exe should spawn");
+        assert!(status.success(), "cmd.exe exited with {status:?}");
+
+        let output = std::fs::read_to_string(&out_path).unwrap();
+        let mut lines = output.lines();
+        assert_eq!(
+            lines.next(),
+            Some("C:/My Project"),
+            "full output: {output:?}"
+        );
+        assert_eq!(
+            lines.next(),
+            Some("[]"),
+            "arg leaked into %2 — the space split the token"
+        );
+
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     // ---- LaunchReport::summary ----

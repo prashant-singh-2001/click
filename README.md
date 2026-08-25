@@ -106,6 +106,13 @@ Example:
 
 Field names are **camelCase**. Variables use `${NAME}` and resolve against the workspace `variables` map first, then process environment variables.
 
+`args` is stored as an array — one element per argument, exactly as the OS receives it. The
+editor's Arguments field shows this as a single command-line-style string: wrap an argument in
+`"..."` if it contains a space, and double any embedded `"`. Backslash is always literal (never
+an escape character), so a Windows path like `C:\My Project\` never needs special-casing —
+e.g. `--dir "C:\My Project"` becomes `["--dir", "C:\\My Project"]`. A live preview under the
+field shows exactly how your text was parsed.
+
 ## Diagnostics
 
 Click writes a rotating log to a separate, machine-local folder (not the roaming config dir above, and not synced):

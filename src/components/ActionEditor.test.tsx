@@ -55,6 +55,78 @@ describe("ActionEditor", () => {
     expect(screen.queryByPlaceholderText(/example.com/i)).not.toBeInTheDocument();
   });
 
+  // Issue #8: the args field used to be `action.args.join(" ")` /
+  // `.split(" ")`, so a quoted argument containing a space couldn't be
+  // expressed and ["a","b"] round-tripped identically to ["a b"].
+  it("parses a quoted argument containing a space into one argument (#8)", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    render(
+      <ActionEditor
+        action={makeAppAction()}
+        onChange={onChange}
+        onRemove={noop}
+        onMoveUp={noop}
+        onMoveDown={noop}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Arguments"), '--dir "C:/My Project"');
+
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ args: ["--dir", "C:/My Project"] }),
+    );
+  });
+
+  it("displays a spacey argument quoted, distinguishing it from two separate arguments (#8)", () => {
+    render(
+      <ActionEditor
+        action={makeAppAction({ args: ["a b"] })}
+        onChange={noop}
+        onRemove={noop}
+        onMoveUp={noop}
+        onMoveDown={noop}
+      />,
+    );
+
+    expect(screen.getByLabelText("Arguments")).toHaveValue('"a b"');
+  });
+
+  it("previews each parsed argument (#8)", () => {
+    render(
+      <ActionEditor
+        action={makeAppAction({ args: ["--dir", "C:/My Project"] })}
+        onChange={noop}
+        onRemove={noop}
+        onMoveUp={noop}
+        onMoveDown={noop}
+      />,
+    );
+
+    expect(screen.getByText(/parses to 2 arguments/i)).toBeInTheDocument();
+    expect(screen.getByText("--dir")).toBeInTheDocument();
+    expect(screen.getByText("C:/My Project")).toBeInTheDocument();
+  });
+
+  it("does not collapse a double space while typing, unlike the old join/split round-trip (#8)", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ActionEditor
+        action={makeAppAction()}
+        onChange={noop}
+        onRemove={noop}
+        onMoveUp={noop}
+        onMoveDown={noop}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Arguments"), "a  b");
+
+    expect(screen.getByLabelText("Arguments")).toHaveValue("a  b");
+  });
+
   it("shows the URL field for a url action", () => {
     render(
       <ActionEditor
