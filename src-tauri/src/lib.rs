@@ -100,6 +100,7 @@ pub fn run() {
             commands::duplicate_workspace,
             commands::validate_action,
             commands::launch_workspace_by_id,
+            commands::launch_workspace_draft,
             commands::create_desktop_shortcut,
             commands::config_status,
             commands::probe_hotkey,

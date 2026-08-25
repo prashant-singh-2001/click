@@ -22,6 +22,11 @@ pub enum LaunchTrigger {
     Tray,
     Hotkey,
     Cli,
+    /// The editor's Launch button, launching the current draft directly
+    /// rather than the last-saved record (issue #9). Kept distinct from
+    /// `Ui` so a log entry never claims to have run the persisted workspace
+    /// when it actually ran unsaved edits.
+    Draft,
 }
 
 impl fmt::Display for LaunchTrigger {
@@ -31,6 +36,7 @@ impl fmt::Display for LaunchTrigger {
             LaunchTrigger::Tray => "tray",
             LaunchTrigger::Hotkey => "hotkey",
             LaunchTrigger::Cli => "cli",
+            LaunchTrigger::Draft => "draft",
         })
     }
 }
@@ -238,6 +244,24 @@ pub async fn launch_workspace_by_id(app: AppHandle, id: String) -> Result<Launch
         .map_err(|e| format!("launch task failed: {e}"))?
 }
 
+/// Launches the workspace exactly as the editor currently shows it, saved or
+/// not — the tray menu, global hotkeys, and the CLI's `run` subcommand all
+/// launch a persisted record by id (`launch_workspace_by_id`); this is the
+/// editor's Launch button, which must run the draft on screen instead
+/// (issue #9). Persists nothing: no disk write, no tray rebuild, no hotkey
+/// re-registration — the workspace may still be discarded.
+#[tauri::command]
+pub async fn launch_workspace_draft(
+    app: AppHandle,
+    workspace: Workspace,
+) -> Result<LaunchReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        launch_resolved(&app, &workspace, LaunchTrigger::Draft)
+    })
+    .await
+    .map_err(|e| format!("launch task failed: {e}"))
+}
+
 /// Shared by the `launch_workspace_by_id` command, the tray menu, global
 /// hotkeys, and the CLI's `run` subcommand — every trigger in FR-4 funnels
 /// through this one lookup-then-launch path, which is why `trigger` is
@@ -265,10 +289,22 @@ pub fn launch_by_id(
             format!("workspace {id} not found")
         })?;
 
-    log::info!("launch ({trigger}): \"{}\" ({id})", workspace.name);
+    Ok(launch_resolved(app, &workspace, trigger))
+}
+
+/// Everything a launch needs once the `Workspace` is already in hand — no
+/// lookup. Shared by `launch_by_id` (which looks the workspace up first) and
+/// `launch_workspace_draft` (which is handed one directly), so the two
+/// paths can never drift apart on logging or progress reporting.
+fn launch_resolved(app: &AppHandle, workspace: &Workspace, trigger: LaunchTrigger) -> LaunchReport {
+    log::info!(
+        "launch ({trigger}): \"{}\" ({})",
+        workspace.name,
+        workspace.id
+    );
 
     let app_for_events = app.clone();
-    let report = launch::launch_workspace(app, &workspace, move |outcome| {
+    let report = launch::launch_workspace(app, workspace, move |outcome| {
         match outcome.status {
             ActionStatus::Started => log::info!("  started: {}", outcome.label),
             ActionStatus::Skipped => log::debug!("  skipped: {}", outcome.label),
@@ -282,7 +318,7 @@ pub fn launch_by_id(
     });
 
     log::info!("launch ({trigger}) finished: {}", report.summary());
-    Ok(report)
+    report
 }
 
 #[tauri::command]
@@ -558,5 +594,16 @@ mod tests {
         let warning = validate_action(app_action(target, vec!["some-arg"], Some("C:/Users/me")));
 
         assert_eq!(warning, None);
+    }
+
+    // issue #9: a log entry naming the wrong trigger for a draft launch
+    // would claim the persisted workspace ran when unsaved edits did.
+    #[test]
+    fn draft_trigger_displays_distinctly_from_the_other_triggers() {
+        assert_eq!(LaunchTrigger::Draft.to_string(), "draft");
+        assert_ne!(
+            LaunchTrigger::Draft.to_string(),
+            LaunchTrigger::Ui.to_string()
+        );
     }
 }
