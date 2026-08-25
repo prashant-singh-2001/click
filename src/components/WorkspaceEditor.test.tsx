@@ -44,16 +44,13 @@ describe("WorkspaceEditor", () => {
     expect(document.activeElement).toBe(nameInput);
   });
 
-  // Issue #9: handleLaunch calls api.launchWorkspace(draft.id) — only the id,
-  // never the current draft's content — so an edit made but not yet saved is
-  // silently discarded and the backend launches whatever was last persisted.
-  // The eventual fix (new Rust command, out of scope here) will need to send
-  // the actual draft rather than just its id; this test encodes that as the
-  // desired contract and is expected to fail against the current bare-id call.
-  // This is orthogonal to issue #16's fetch-by-id rewiring — handleLaunch's
-  // signature is untouched by that change, so this stays red for the exact
-  // same reason it always has.
-  it.fails("Launch reflects unsaved draft edits, not the last-saved record (#9)", async () => {
+  // Issue #9: handleLaunch used to call api.launchWorkspace(draft.id) — only
+  // the id, so an edit made but not yet saved was silently discarded and the
+  // backend launched whatever was last persisted. It now calls
+  // api.launchDraft(draft), sending the actual edited content. This was
+  // it.fails against the old bare-id call; per CLAUDE.md, fixing the bug
+  // flips the test rather than deleting it.
+  it("Launch reflects unsaved draft edits, not the last-saved record (#9)", async () => {
     const user = userEvent.setup();
     const workspace = makeWorkspace({
       actions: [
@@ -67,7 +64,7 @@ describe("WorkspaceEditor", () => {
         },
       ],
     });
-    mockedApi.launchWorkspace.mockResolvedValue({ outcomes: [] });
+    mockedApi.launchDraft.mockResolvedValue({ outcomes: [] });
     await renderExisting(workspace);
 
     const urlInput = screen.getByDisplayValue("http://localhost:3000");
@@ -76,18 +73,72 @@ describe("WorkspaceEditor", () => {
 
     await user.click(screen.getByRole("button", { name: /^launch$/i }));
 
-    // launchWorkspace's real signature is (id: string) — this asserts the
-    // desired future contract (the whole draft), which is why the object
-    // literal below has no type to check against yet and needs the
-    // suppression. That mismatch is the point of this it.fails (see above).
-    expect(mockedApi.launchWorkspace).toHaveBeenCalledWith(
+    expect(mockedApi.launchDraft).toHaveBeenCalledWith(
       expect.objectContaining({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        actions: expect.arrayContaining([
-          expect.objectContaining({ url: "http://localhost:9999" }),
-        ]),
+        actions: [expect.objectContaining({ url: "http://localhost:9999" })],
       }),
     );
+  });
+
+  // Issue #9: a workspace that has never been saved has no persisted record
+  // to look up by id, so the old launchWorkspace(id) call failed with
+  // "workspace not found" for a brand-new workspace. launchDraft sends the
+  // content directly, so there's nothing to look up.
+  it("launches a brand-new, never-saved workspace (#9)", async () => {
+    const user = userEvent.setup();
+    mockedApi.launchDraft.mockResolvedValue({ outcomes: [] });
+
+    render(<WorkspaceEditor workspaceId={null} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: /^launch$/i }));
+
+    expect(await screen.findByText(/launch result/i)).toBeInTheDocument();
+    expect(mockedApi.launchDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "New workspace" }),
+    );
+  });
+
+  // Issue #9: launching the draft instead of the saved record means a
+  // successful launch no longer implies the edits are on disk — this note
+  // is what keeps that honest.
+  it("shows an unsaved-edits hint after launching a modified draft (#9)", async () => {
+    const user = userEvent.setup();
+    mockedApi.launchDraft.mockResolvedValue({ outcomes: [] });
+    await renderExisting(makeWorkspace({ name: "Original" }));
+
+    const nameInput = screen.getByPlaceholderText("Workspace name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Edited");
+    await user.click(screen.getByRole("button", { name: /^launch$/i }));
+
+    expect(await screen.findByText(/ran your unsaved edits/i)).toBeInTheDocument();
+  });
+
+  it("shows no unsaved-edits hint launching straight after load, unedited (#9)", async () => {
+    const user = userEvent.setup();
+    mockedApi.launchDraft.mockResolvedValue({ outcomes: [] });
+    await renderExisting(makeWorkspace());
+
+    await user.click(screen.getByRole("button", { name: /^launch$/i }));
+
+    await screen.findByText(/launch result/i);
+    expect(screen.queryByText(/ran your unsaved edits/i)).not.toBeInTheDocument();
+  });
+
+  it("shows no unsaved-edits hint launching right after Save (#9)", async () => {
+    const user = userEvent.setup();
+    mockedApi.launchDraft.mockResolvedValue({ outcomes: [] });
+    await renderExisting(makeWorkspace({ name: "Original" }));
+
+    const nameInput = screen.getByPlaceholderText("Workspace name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Edited");
+    // onSaved is a vi.fn() here (via renderExisting), so the editor stays
+    // mounted and interactable after Save instead of navigating away.
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await user.click(screen.getByRole("button", { name: /^launch$/i }));
+
+    await screen.findByText(/launch result/i);
+    expect(screen.queryByText(/ran your unsaved edits/i)).not.toBeInTheDocument();
   });
 
   it("shows a Save failed banner when saving rejects", async () => {
@@ -102,7 +153,7 @@ describe("WorkspaceEditor", () => {
 
   it("shows a Launch failed banner when launching rejects", async () => {
     const user = userEvent.setup();
-    mockedApi.launchWorkspace.mockRejectedValue("workspace abc123 not found");
+    mockedApi.launchDraft.mockRejectedValue("workspace abc123 not found");
     await renderExisting(makeWorkspace());
 
     await user.click(screen.getByRole("button", { name: /^launch$/i }));

@@ -59,7 +59,8 @@ See [Development](#development).
 
 1. **Create a workspace** — click **+ New workspace**, give it a name.
 2. **Add actions** — **+ Add app**, then either **Choose app…** to pick from installed applications or **Browse…** for a specific `.exe` (add args like `${PROJECT_DIR}`), or **+ Add URL**.
-3. **Launch** — hit **Launch**. Watch the per-action progress.
+3. **Launch** — hit **Launch**. Watch the per-action progress. This runs exactly what's in the
+   editor, saved or not — a note appears if it ran edits you haven't saved yet.
 4. **Make it one-click** — from the editor, **Create desktop shortcut**, or assign a **global hotkey**, or use the **tray** menu.
 5. **From the terminal** — `click run --id <workspace-uuid>`.
 

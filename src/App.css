@@ -263,6 +263,15 @@ textarea {
   padding-top: 0.5rem;
 }
 
+/* Launch now runs the draft on screen, saved or not (issue #9) — this warns
+   when what just ran isn't what's on disk, so a passing test doesn't get
+   mistaken for a saved one. Reuses .action-warning's amber. */
+.unsaved-launch-hint {
+  margin-top: 0.75rem;
+  color: #a15c00;
+  font-size: 0.9em;
+}
+
 .launch-progress ul {
   list-style: none;
   padding: 0;

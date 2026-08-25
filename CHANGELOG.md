@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The editor's Launch button now runs your current edits, not the last-saved version.**
+  It used to launch by id, which the backend resolved against the persisted workspace — so an
+  edit made but not yet saved was silently discarded, and a brand-new, never-saved workspace
+  couldn't be launched at all ("workspace not found"). Launch now sends the draft directly and
+  persists nothing, so testing an edit no longer requires saving it first, and a new workspace
+  can be tried before it's ever written to disk. Since a successful launch no longer implies
+  the edits are saved, the result now notes "This ran your unsaved edits — Save to keep them"
+  when that's the case. ([#9])
 - **Command-line arguments can now contain spaces.** The args field used to render as
   `action.args.join(" ")` and parse keystrokes back with `.split(" ")`, so a quoted path like
   `--dir "C:/My Project"` was impossible to express, and `["a","b"]` was indistinguishable
@@ -211,6 +219,7 @@ development environment from a single named workspace.
 [#4]: https://github.com/prashant-singh-2001/click/issues/4
 [#6]: https://github.com/prashant-singh-2001/click/issues/6
 [#8]: https://github.com/prashant-singh-2001/click/issues/8
+[#9]: https://github.com/prashant-singh-2001/click/issues/9
 [#10]: https://github.com/prashant-singh-2001/click/issues/10
 [#16]: https://github.com/prashant-singh-2001/click/issues/16
 [#17]: https://github.com/prashant-singh-2001/click/issues/17

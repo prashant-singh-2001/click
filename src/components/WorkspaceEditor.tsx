@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { newAppAction, newUrlAction, newWorkspace } from "../types";
 import type { HotkeyStatus, LaunchReport, Workspace } from "../types";
@@ -26,13 +26,28 @@ export function WorkspaceEditor({
   const [saving, setSaving] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [report, setReport] = useState<LaunchReport | null>(null);
+  const [reportWasUnsaved, setReportWasUnsaved] = useState(false);
   const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [hotkeyStatus, setHotkeyStatus] = useState<HotkeyStatus | null>(null);
+  // The last-saved shape of this workspace, for the "you're launching unsaved
+  // edits" hint (issue #9) — null means there's nothing saved to compare
+  // against yet, which is also true and correct for a brand-new workspace.
+  // Updated after the initial fetch and after every successful save; a plain
+  // JSON.stringify comparison can over-report dirty on key-order differences
+  // but won't under-report for this shape (every update spreads the existing
+  // object), which is the right trade for a hint rather than a hard gate.
+  const savedJson = useRef<string | null>(null);
 
   useEffect(() => {
     if (workspaceId === null) return;
-    api.getWorkspace(workspaceId).then(setDraft).catch((err) => setLoadError(String(err)));
+    api
+      .getWorkspace(workspaceId)
+      .then((workspace) => {
+        setDraft(workspace);
+        savedJson.current = JSON.stringify(workspace);
+      })
+      .catch((err) => setLoadError(String(err)));
   }, [workspaceId]);
 
   const draftId = draft?.id;
@@ -112,6 +127,7 @@ export function WorkspaceEditor({
     setActionError(null);
     try {
       await api.saveWorkspace(draft);
+      savedJson.current = JSON.stringify(draft);
       onSaved();
     } catch (err) {
       setActionError(`Save failed: ${String(err)}`);
@@ -124,6 +140,7 @@ export function WorkspaceEditor({
     setShortcutMessage(null);
     try {
       await api.saveWorkspace(draft);
+      savedJson.current = JSON.stringify(draft);
       const path = await api.createDesktopShortcut(draft.id);
       setShortcutMessage(`Created: ${path}`);
     } catch (err) {
@@ -131,13 +148,18 @@ export function WorkspaceEditor({
     }
   };
 
+  // Launches the draft exactly as shown, saved or not (issue #9) — the
+  // previous behavior launched by id, which ran the last-saved record and
+  // couldn't launch a brand-new workspace at all (nothing to look up yet).
   const handleLaunch = async () => {
     setLaunching(true);
     setReport(null);
     setActionError(null);
+    const wasUnsaved = savedJson.current === null || JSON.stringify(draft) !== savedJson.current;
     try {
-      const result = await api.launchWorkspace(draft.id);
+      const result = await api.launchDraft(draft);
       setReport(result);
+      setReportWasUnsaved(wasUnsaved);
     } catch (err) {
       setActionError(`Launch failed: ${String(err)}`);
     } finally {
@@ -296,7 +318,14 @@ export function WorkspaceEditor({
         </div>
       )}
       {shortcutMessage && <p className="shortcut-message">{shortcutMessage}</p>}
-      {report && <LaunchProgress report={report} />}
+      {report && (
+        <>
+          {reportWasUnsaved && (
+            <p className="unsaved-launch-hint">This ran your unsaved edits — Save to keep them.</p>
+          )}
+          <LaunchProgress report={report} />
+        </>
+      )}
     </div>
   );
 }

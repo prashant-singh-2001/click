@@ -38,7 +38,7 @@ CI (`.github/workflows/ci.yml`, windows-latest) runs exactly: `npm run lint`, `n
 
 **The launch engine lives in Rust, never in the webview.** A desktop shortcut or `click run --id <uuid>` must boot a workspace without a WebView2 window existing, so all launching, config I/O, tray, hotkeys, and shortcut generation are native. `src/` is a pure editor that reads and writes config through `invoke` and spawns nothing.
 
-All four "one click" triggers — UI button, tray menu, global hotkey, CLI/shortcut — funnel through `commands::launch_by_id` (`src-tauri/src/commands.rs`), which looks up the workspace and calls `launch::launch_workspace`. Add a trigger by calling that function, not by reimplementing launch.
+All four "one click" triggers — UI button, tray menu, global hotkey, CLI/shortcut — funnel through `commands::launch_by_id` (`src-tauri/src/commands.rs`), which looks up the workspace and calls `commands::launch_resolved`. The editor's Launch button is a fifth path, `commands::launch_workspace_draft`, which skips the lookup — the frontend hands it the current draft directly rather than an id, so Launch runs exactly what's on screen, saved or not (issue #9). Both paths converge on `launch_resolved`, which calls `launch::launch_workspace`; add a trigger by calling `launch_resolved`, not by reimplementing launch.
 
 Module map (`src-tauri/src/`): `lib.rs` (builder, plugin order, state, close-to-tray) · `model.rs` (serde data model) · `store.rs` (load/save + quarantine) · `vars.rs` (`${VAR}` resolution) · `launch.rs` (the engine) · `logging.rs` (rotating log, panic hook, fatal-startup dialog) · `commands.rs` (the `#[tauri::command]` surface) · `tray.rs` · `hotkeys.rs` · `cli.rs` · `installed_apps.rs` (Start Menu scan for the app picker) · `shortcut.rs` (`.lnk` generation).
 
@@ -68,7 +68,7 @@ Vitest + React Testing Library, jsdom, `src/test/setup.ts`. Test files sit next 
 
 Pattern: `vi.mock("../api")` at module top, then `import { mockedApi, resetApiMocks } from "../test/mockApi"` and `beforeEach(resetApiMocks)`. `resetApiMocks` pre-stubs the calls components fire on mount (hotkey status, validation, installed apps) so unrelated tests don't crash on unstubbed promises.
 
-**`it.fails(...)` is deliberate here.** Some tests assert the *correct* behavior for known-open bugs (#2 variables-editor focus loss, #9 editor Launch using the saved record rather than the draft) and are marked `it.fails` so CI stays green today but turns red the moment the bug is fixed without updating the test. If you fix one of those bugs, flip the test to `it(...)` in the same change — don't delete it.
+**`it.fails(...)` is deliberate here.** Some tests assert the *correct* behavior for known-open bugs (currently just #2, variables-editor focus loss) and are marked `it.fails` so CI stays green today but turns red the moment the bug is fixed without updating the test. If you fix one of those bugs, flip the test to `it(...)` in the same change — don't delete it.
 
 ## Conventions
 

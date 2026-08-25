@@ -22,6 +22,8 @@ export const api = {
     invoke<string | null>("validate_action", { action }),
   launchWorkspace: (id: string) =>
     invoke<LaunchReport>("launch_workspace_by_id", { id }),
+  launchDraft: (workspace: Workspace) =>
+    invoke<LaunchReport>("launch_workspace_draft", { workspace }),
   createDesktopShortcut: (id: string) =>
     invoke<string>("create_desktop_shortcut", { id }),
   configStatus: () => invoke<ConfigStatus>("config_status"),
