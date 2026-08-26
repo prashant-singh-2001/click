@@ -198,8 +198,7 @@ pub fn duplicate_workspace(
 /// a target that can't accept them (issue #17 — see `launch::route_for`).
 /// Never blocks saving — the path may legitimately not exist on this
 /// machine yet.
-#[tauri::command]
-pub fn validate_action(action: Action) -> Option<String> {
+fn validate(action: Action) -> Option<String> {
     match action {
         Action::App {
             path, args, cwd, ..
@@ -232,6 +231,22 @@ pub fn validate_action(action: Action) -> Option<String> {
             }
         }
     }
+}
+
+/// Fired from the editor on every keystroke rather than an explicit click, so
+/// unlike its sync siblings this one must not run on the UI thread: a
+/// non-async command runs inline on the WebView2 message pump, and the
+/// `Path::exists()` in `validate` is a `stat` that blocks to the SMB timeout
+/// on a dead UNC path or a spun-down mapped drive — freezing the whole
+/// window, not just a worker (issue #11).
+#[tauri::command]
+pub async fn validate_action(action: Action) -> Option<String> {
+    tauri::async_runtime::spawn_blocking(move || validate(action))
+        .await
+        .unwrap_or_else(|err| {
+            log::error!("validation task panicked: {err}");
+            None
+        })
 }
 
 /// Runs the launch on a blocking thread — `launch::launch_workspace` sleeps
@@ -561,7 +576,7 @@ mod tests {
         let fx = Fixture::new("warns_when_a_shell_routed_target_has_args");
         let target = fx.touch("Shortcut.lnk");
 
-        let warning = validate_action(app_action(target, vec!["some-arg"], None));
+        let warning = validate(app_action(target, vec!["some-arg"], None));
 
         assert!(warning.is_some());
     }
@@ -571,7 +586,7 @@ mod tests {
         let fx = Fixture::new("warns_when_a_shell_routed_target_has_a_cwd");
         let target = fx.touch("installer.msi");
 
-        let warning = validate_action(app_action(target, vec![], Some("C:/Users/me")));
+        let warning = validate(app_action(target, vec![], Some("C:/Users/me")));
 
         assert!(warning.is_some());
     }
@@ -581,7 +596,7 @@ mod tests {
         let fx = Fixture::new("stays_silent_for_a_shell_routed_target_with_no_args_or_cwd");
         let target = fx.touch("Shortcut.lnk");
 
-        let warning = validate_action(app_action(target, vec![], None));
+        let warning = validate(app_action(target, vec![], None));
 
         assert_eq!(warning, None);
     }
@@ -591,7 +606,7 @@ mod tests {
         let fx = Fixture::new("stays_silent_for_args_on_a_native_exe");
         let target = fx.touch("app.exe");
 
-        let warning = validate_action(app_action(target, vec!["some-arg"], Some("C:/Users/me")));
+        let warning = validate(app_action(target, vec!["some-arg"], Some("C:/Users/me")));
 
         assert_eq!(warning, None);
     }

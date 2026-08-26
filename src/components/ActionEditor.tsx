@@ -6,6 +6,13 @@ import type { Action, InstalledApp } from "../types";
 import { DEFAULT_APP_LABEL } from "../types";
 import { AppPicker } from "./AppPicker";
 
+// Issue #11: action identity changes on every keystroke (every onChange spreads
+// a new object), so validating on the raw effect dependency fired one IPC
+// round-trip per character. Debouncing collapses a typing burst to one call;
+// exported so the test suite can wait exactly this long rather than a magic
+// number.
+export const VALIDATE_DEBOUNCE_MS = 300;
+
 export function ActionEditor({
   action,
   onChange,
@@ -33,7 +40,19 @@ export function ActionEditor({
   );
 
   useEffect(() => {
-    api.validateAction(action).then(setWarning).catch(console.error);
+    let ignore = false;
+    const timer = setTimeout(() => {
+      api
+        .validateAction(action)
+        .then((next) => {
+          if (!ignore) setWarning(next);
+        })
+        .catch(console.error);
+    }, VALIDATE_DEBOUNCE_MS);
+    return () => {
+      ignore = true;
+      clearTimeout(timer);
+    };
   }, [action]);
 
   function handleArgsChange(text: string) {
