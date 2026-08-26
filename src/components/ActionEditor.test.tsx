@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { render, screen, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ActionEditor } from "./ActionEditor";
+import { ActionEditor, VALIDATE_DEBOUNCE_MS } from "./ActionEditor";
 import type { AppAction, InstalledApp, UrlAction } from "../types";
 
 vi.mock("../api");
@@ -158,6 +158,93 @@ describe("ActionEditor", () => {
     expect(
       await screen.findByText(/path does not exist: C:\/missing\.exe/i),
     ).toBeInTheDocument();
+  });
+
+  // Issue #11: `action` is a fresh object on every keystroke (every onChange
+  // spreads a new one), so the validation effect used to fire one IPC call
+  // per character with no ordering guard. These are the only tests in this
+  // file using fake timers — scoped to this block so the other tests keep
+  // running on real timers.
+  describe("validation debounce (#11)", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function renderAt(path: string) {
+      return (
+        <ActionEditor
+          action={makeAppAction({ path })}
+          onChange={noop}
+          onRemove={noop}
+          onMoveUp={noop}
+          onMoveDown={noop}
+        />
+      );
+    }
+
+    it("makes zero calls mid-burst, then exactly one after the debounce settles", async () => {
+      const { rerender } = render(renderAt("C"));
+
+      for (const path of ["C:", "C:/", "C:/a", "C:/ap", "C:/app"]) {
+        rerender(renderAt(path));
+      }
+
+      expect(mockedApi.validateAction).not.toHaveBeenCalled();
+
+      await act(() => vi.advanceTimersByTimeAsync(VALIDATE_DEBOUNCE_MS));
+
+      expect(mockedApi.validateAction).toHaveBeenCalledTimes(1);
+      expect(mockedApi.validateAction).toHaveBeenCalledWith(
+        expect.objectContaining({ path: "C:/app" }),
+      );
+    });
+
+    it("keeps a newer response over a slower older one that resolves later", async () => {
+      let resolveOld!: (value: string | null) => void;
+      let resolveNew!: (value: string | null) => void;
+      mockedApi.validateAction
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveOld = resolve;
+            }),
+        )
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveNew = resolve;
+            }),
+        );
+
+      const { rerender } = render(renderAt("C:/old.exe"));
+      await act(() => vi.advanceTimersByTimeAsync(VALIDATE_DEBOUNCE_MS));
+
+      rerender(renderAt("C:/new.exe"));
+      await act(() => vi.advanceTimersByTimeAsync(VALIDATE_DEBOUNCE_MS));
+
+      expect(mockedApi.validateAction).toHaveBeenCalledTimes(2);
+
+      // Resolve the newer request first, then the older, slower one — the
+      // older response must not overwrite the newer warning once it lands.
+      await act(async () => {
+        resolveNew("new warning");
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(screen.getByText(/new warning/i)).toBeInTheDocument();
+
+      await act(async () => {
+        resolveOld("old warning");
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(screen.getByText(/new warning/i)).toBeInTheDocument();
+      expect(screen.queryByText(/old warning/i)).not.toBeInTheDocument();
+    });
   });
 
   const PICKED_APP: InstalledApp = {

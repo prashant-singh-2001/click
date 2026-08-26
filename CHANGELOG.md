@@ -52,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   editor now warns if you set them on one, instead of the launch silently failing later. The
   installed-apps picker (#32) no longer hides non-`.exe` Start Menu entries, since the
   reason it did — the launch engine couldn't open them — is what this fixes. ([#17])
+- **Action validation no longer fires an IPC call on every keystroke, and no longer runs on
+  the UI thread.** The warning shown under an app/URL field re-validated on every edit with
+  no debounce and no ordering guard, so a slow earlier response could overwrite a newer one.
+  It's now debounced (~300 ms) and drops any response superseded by a later edit. Separately,
+  `validate_action` ran synchronously on the WebView2 message pump — its path-existence check
+  is a `stat()` that can block to the SMB timeout on a dead UNC path or a spun-down mapped
+  drive, freezing the whole window rather than just a worker; it now runs on a blocking task
+  like the other filesystem-touching commands. ([#11])
 
 ## [0.2.4] — 2026-08-20
 
@@ -232,3 +240,4 @@ development environment from a single named workspace.
 [#14]: https://github.com/prashant-singh-2001/click/issues/14
 [#19]: https://github.com/prashant-singh-2001/click/issues/19
 [#32]: https://github.com/prashant-singh-2001/click/issues/32
+[#11]: https://github.com/prashant-singh-2001/click/issues/11
