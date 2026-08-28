@@ -105,11 +105,15 @@ export function newAppAction(): AppAction {
   };
 }
 
+// Mirrors DEFAULT_APP_LABEL — reused by WorkspaceEditor's blank-label
+// defaulting at save time (issue #21) so there's one copy of the string.
+export const DEFAULT_URL_LABEL = "New URL";
+
 export function newUrlAction(): UrlAction {
   return {
     type: "url",
     id: crypto.randomUUID(),
-    label: "New URL",
+    label: DEFAULT_URL_LABEL,
     url: "",
     enabled: true,
     delayAfterMs: null,
