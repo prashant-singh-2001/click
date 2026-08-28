@@ -67,6 +67,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now disabled while the name is blank, with an inline hint; a blank action label is silently
   defaulted to the same label a freshly-added action gets ("New app"/"New URL") rather than
   blocking the save, since a blank label doesn't produce a visible blank row anywhere today. ([#21])
+- **Desktop shortcuts for two same-named workspaces no longer overwrite each other.** The
+  `.lnk` filename was derived from the workspace name alone, and the file write
+  (`std::fs::File::create`, via the `mslnk` crate) silently truncates whatever's already at
+  that path — no exists-check, no error. Since the shortcut's baked-in launch target is the
+  workspace's id, not its name, this meant a desktop icon you'd had for weeks could silently
+  start launching an unrelated workspace the moment someone created a same-named shortcut for
+  it. The filename now includes a short fragment of the workspace's own id, which is
+  collision-proof (two different workspaces can never collide) while staying idempotent
+  (re-creating the same workspace's shortcut always overwrites only its own prior file). ([#15])
 
 ## [0.2.4] — 2026-08-20
 
@@ -249,3 +258,4 @@ development environment from a single named workspace.
 [#32]: https://github.com/prashant-singh-2001/click/issues/32
 [#11]: https://github.com/prashant-singh-2001/click/issues/11
 [#21]: https://github.com/prashant-singh-2001/click/issues/21
+[#15]: https://github.com/prashant-singh-2001/click/issues/15
