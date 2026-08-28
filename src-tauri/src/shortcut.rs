@@ -3,11 +3,11 @@ use mslnk::ShellLink;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
-/// Writes `<Desktop>/<workspace name>.lnk` targeting the currently running
-/// exe with `run --id <uuid>` as its argument. Resolving the target from
-/// `current_exe()` at click-generation time (rather than hardcoding a dev
-/// path) means a shortcut created from an installed build points at the
-/// installed binary.
+/// Writes `<Desktop>/<workspace name> (<short id>).lnk` targeting the
+/// currently running exe with `run --id <uuid>` as its argument. Resolving
+/// the target from `current_exe()` at click-generation time (rather than
+/// hardcoding a dev path) means a shortcut created from an installed build
+/// points at the installed binary.
 ///
 /// The Desktop path is resolved via Tauri's path resolver (backed by the
 /// Windows known-folder API), not `%USERPROFILE%\Desktop` — OneDrive's
@@ -30,7 +30,17 @@ fn create_shortcut_in(workspace: &Workspace, dir: &Path) -> Result<PathBuf, Stri
     }
     link.set_icon_location(Some(exe_str.clone()));
 
-    let lnk_path = dir.join(format!("{}.lnk", sanitize_filename(&workspace.name)));
+    // The name alone isn't unique — two workspaces can share a display name —
+    // and `create_lnk` below silently overwrites whatever's already at the
+    // target path (`File::create` truncates, no exists-check, no error).
+    // Suffixing with a fragment of the workspace's own id makes the filename
+    // collision-proof while staying idempotent: re-creating this exact
+    // workspace's shortcut always lands on the same path (issue #15).
+    let short_id = &workspace.id.to_string()[..8];
+    let lnk_path = dir.join(format!(
+        "{} ({short_id}).lnk",
+        sanitize_filename(&workspace.name)
+    ));
     link.create_lnk(&lnk_path).map_err(|e| e.to_string())?;
     Ok(lnk_path)
 }
@@ -89,5 +99,47 @@ mod tests {
     fn sanitizes_illegal_filename_characters() {
         assert_eq!(sanitize_filename(r#"Test: A/B\C"#), "Test_ A_B_C");
         assert_eq!(sanitize_filename("   "), "Workspace");
+    }
+
+    // issue #15: the filename used to be derived from the name alone, so two
+    // workspaces named "Dev" would write the same Dev.lnk and the second
+    // create_lnk call (File::create, which truncates with no exists-check)
+    // silently overwrote the first's shortcut, id and all.
+    #[test]
+    fn two_workspaces_with_the_same_name_get_distinct_shortcut_files() {
+        let dir = std::env::temp_dir().join("click-shortcut-test-collision");
+        std::fs::create_dir_all(&dir).unwrap();
+        let a = test_workspace("Dev");
+        let b = test_workspace("Dev");
+
+        let path_a = create_shortcut_in(&a, &dir).expect("shortcut creation should succeed");
+        let path_b = create_shortcut_in(&b, &dir).expect("shortcut creation should succeed");
+
+        assert_ne!(path_a, path_b);
+        assert!(
+            path_a.exists(),
+            "workspace A's shortcut must survive B's creation"
+        );
+        assert!(path_b.exists());
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // The id-suffix approach only works if it's idempotent per workspace —
+    // otherwise re-clicking "Create desktop shortcut" for the same workspace
+    // would litter the desktop with a new file every time instead of
+    // updating the one shortcut in place.
+    #[test]
+    fn recreating_the_same_workspaces_shortcut_reuses_the_same_path() {
+        let dir = std::env::temp_dir().join("click-shortcut-test-idempotent");
+        std::fs::create_dir_all(&dir).unwrap();
+        let ws = test_workspace("Dev");
+
+        let first = create_shortcut_in(&ws, &dir).expect("shortcut creation should succeed");
+        let second = create_shortcut_in(&ws, &dir).expect("shortcut creation should succeed");
+
+        assert_eq!(first, second);
+
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
