@@ -76,6 +76,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it. The filename now includes a short fragment of the workspace's own id, which is
   collision-proof (two different workspaces can never collide) while staying idempotent
   (re-creating the same workspace's shortcut always overwrites only its own prior file). ([#15])
+- **Closing the editor with unsaved changes now asks first.** Close called `onCancel`
+  unconditionally, so an edit made but not yet saved was discarded with no warning. It now
+  tracks whether anything has changed since the editor was opened (or since the last save) and
+  shows a confirm dialog — reusing the same `Modal` component the delete confirmation already
+  uses — only when there's something to lose; a freshly-opened, untouched workspace (new or
+  existing) still closes immediately. ([#20])
 
 ## [0.2.4] — 2026-08-20
 
@@ -259,3 +265,4 @@ development environment from a single named workspace.
 [#11]: https://github.com/prashant-singh-2001/click/issues/11
 [#21]: https://github.com/prashant-singh-2001/click/issues/21
 [#15]: https://github.com/prashant-singh-2001/click/issues/15
+[#20]: https://github.com/prashant-singh-2001/click/issues/20

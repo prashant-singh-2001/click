@@ -12,6 +12,7 @@ import { ActionEditor } from "./ActionEditor";
 import { HotkeyInput } from "./HotkeyInput";
 import { IconPicker } from "./IconPicker";
 import { LaunchProgress } from "./LaunchProgress";
+import { Modal } from "./Modal";
 import { TagEditor } from "./TagEditor";
 
 // A blank label never shows up in any list or tray row today (only inside
@@ -59,6 +60,15 @@ export function WorkspaceEditor({
   // but won't under-report for this shape (every update spreads the existing
   // object), which is the right trade for a hint rather than a hard gate.
   const savedJson = useRef<string | null>(null);
+  // The baseline for "does the user have anything to lose by closing"
+  // (issue #20) — distinct from savedJson, which means "matches what's
+  // persisted on disk." A brand-new workspace has no persisted copy
+  // (savedJson stays null until the first save), but a freshly-opened one
+  // with zero edits has nothing to lose either; this starts at whatever the
+  // editor first showed, whether that's a fetched workspace or a blank
+  // template, so only actual edits — not "never saved" — mark it dirty.
+  const mountedJson = useRef<string | null>(draft ? JSON.stringify(draft) : null);
+  const [confirmingClose, setConfirmingClose] = useState(false);
 
   useEffect(() => {
     if (workspaceId === null) return;
@@ -67,6 +77,7 @@ export function WorkspaceEditor({
       .then((workspace) => {
         setDraft(workspace);
         savedJson.current = JSON.stringify(workspace);
+        mountedJson.current = JSON.stringify(workspace);
       })
       .catch((err) => setLoadError(String(err)));
   }, [workspaceId]);
@@ -151,6 +162,7 @@ export function WorkspaceEditor({
       setDraft(sanitized);
       await api.saveWorkspace(sanitized);
       savedJson.current = JSON.stringify(sanitized);
+      mountedJson.current = savedJson.current;
       onSaved();
     } catch (err) {
       setActionError(`Save failed: ${String(err)}`);
@@ -166,6 +178,7 @@ export function WorkspaceEditor({
       setDraft(sanitized);
       await api.saveWorkspace(sanitized);
       savedJson.current = JSON.stringify(sanitized);
+      mountedJson.current = savedJson.current;
       const path = await api.createDesktopShortcut(sanitized.id);
       setShortcutMessage(`Created: ${path}`);
     } catch (err) {
@@ -193,6 +206,18 @@ export function WorkspaceEditor({
   };
 
   const nameIsBlank = draft.name.trim() === "";
+  const isDirty = JSON.stringify(draft) !== mountedJson.current;
+
+  // Closing with nothing to lose just closes (issue #20) — the confirm
+  // dialog only appears when there are edits since the editor opened (or
+  // since the last save) that closing would silently discard.
+  const handleClose = () => {
+    if (isDirty) {
+      setConfirmingClose(true);
+    } else {
+      onCancel();
+    }
+  };
 
   return (
     <div className="workspace-editor">
@@ -335,10 +360,26 @@ export function WorkspaceEditor({
         <button type="button" onClick={handleCreateShortcut} disabled={nameIsBlank}>
           Create desktop shortcut
         </button>
-        <button type="button" onClick={onCancel}>
+        <button type="button" onClick={handleClose}>
           Close
         </button>
       </div>
+
+      {confirmingClose && (
+        <Modal label="Discard unsaved changes?" onClose={() => setConfirmingClose(false)}>
+          <p>
+            You have unsaved changes to "{draft.name}". Closing now will discard them.
+          </p>
+          <div className="field-row">
+            <button type="button" onClick={() => setConfirmingClose(false)}>
+              Cancel
+            </button>
+            <button type="button" className="button-danger" onClick={onCancel}>
+              Discard changes
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {actionError && (
         <div className="banner banner-error" role="alert">
