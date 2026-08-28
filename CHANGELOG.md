@@ -60,6 +60,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is a `stat()` that can block to the SMB timeout on a dead UNC path or a spun-down mapped
   drive, freezing the whole window rather than just a worker; it now runs on a blocking task
   like the other filesystem-touching commands. ([#11])
+- **A blank workspace name (or action label) can no longer be saved.** Both fields were plain
+  unguarded bindings, so clearing one and saving persisted it that way — an empty row in both
+  the workspace list and the tray menu, since neither renders a fallback for `""`. Save and
+  Create desktop shortcut (a second, previously-unguarded path to the same persist call) are
+  now disabled while the name is blank, with an inline hint; a blank action label is silently
+  defaulted to the same label a freshly-added action gets ("New app"/"New URL") rather than
+  blocking the save, since a blank label doesn't produce a visible blank row anywhere today. ([#21])
 
 ## [0.2.4] — 2026-08-20
 
@@ -241,3 +248,4 @@ development environment from a single named workspace.
 [#19]: https://github.com/prashant-singh-2001/click/issues/19
 [#32]: https://github.com/prashant-singh-2001/click/issues/32
 [#11]: https://github.com/prashant-singh-2001/click/issues/11
+[#21]: https://github.com/prashant-singh-2001/click/issues/21

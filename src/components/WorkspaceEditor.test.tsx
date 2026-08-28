@@ -163,6 +163,60 @@ describe("WorkspaceEditor", () => {
     );
   });
 
+  // Issue #21: neither the workspace name nor an action label had a guard —
+  // clearing either to blank and saving persisted it that way, showing up as
+  // an empty row in the list and tray menu.
+  it("disables Save and Create desktop shortcut when the name is blank, with a hint (#21)", async () => {
+    const user = userEvent.setup();
+    await renderExisting(makeWorkspace({ name: "Original" }));
+
+    await user.clear(screen.getByPlaceholderText("Workspace name"));
+
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /create desktop shortcut/i })).toBeDisabled();
+    expect(screen.getByText(/name is required/i)).toBeInTheDocument();
+  });
+
+  it("re-enables Save once a name is typed back in (#21)", async () => {
+    const user = userEvent.setup();
+    await renderExisting(makeWorkspace({ name: "Original" }));
+
+    const nameInput = screen.getByPlaceholderText("Workspace name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "New name");
+
+    expect(screen.getByRole("button", { name: /^save$/i })).not.toBeDisabled();
+    expect(screen.queryByText(/name is required/i)).not.toBeInTheDocument();
+  });
+
+  it("defaults a blank action label to the type's default label on save (#21)", async () => {
+    const user = userEvent.setup();
+    await renderExisting(
+      makeWorkspace({
+        actions: [
+          {
+            type: "app",
+            id: "action-1",
+            label: "   ",
+            path: "C:/app.exe",
+            args: [],
+            cwd: null,
+            enabled: true,
+            delayAfterMs: null,
+          },
+        ],
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(mockedApi.saveWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actions: [expect.objectContaining({ label: "New app" })],
+      }),
+    );
+  });
+
   it("adds a tag and includes it in the saved workspace", async () => {
     const user = userEvent.setup();
     await renderExisting(makeWorkspace());

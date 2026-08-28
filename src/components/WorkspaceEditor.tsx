@@ -1,12 +1,33 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import { newAppAction, newUrlAction, newWorkspace } from "../types";
+import {
+  DEFAULT_APP_LABEL,
+  DEFAULT_URL_LABEL,
+  newAppAction,
+  newUrlAction,
+  newWorkspace,
+} from "../types";
 import type { HotkeyStatus, LaunchReport, Workspace } from "../types";
 import { ActionEditor } from "./ActionEditor";
 import { HotkeyInput } from "./HotkeyInput";
 import { IconPicker } from "./IconPicker";
 import { LaunchProgress } from "./LaunchProgress";
 import { TagEditor } from "./TagEditor";
+
+// A blank label never shows up in any list or tray row today (only inside
+// ActionEditor's own input), but saving one anyway would just be storing bad
+// data — this defaults it to the same label a freshly-added action gets,
+// same as the name field is required rather than left blank (issue #21).
+function withDefaultedLabels(workspace: Workspace): Workspace {
+  return {
+    ...workspace,
+    actions: workspace.actions.map((action) =>
+      action.label.trim()
+        ? action
+        : { ...action, label: action.type === "app" ? DEFAULT_APP_LABEL : DEFAULT_URL_LABEL },
+    ),
+  };
+}
 
 export function WorkspaceEditor({
   workspaceId,
@@ -126,8 +147,10 @@ export function WorkspaceEditor({
     setSaving(true);
     setActionError(null);
     try {
-      await api.saveWorkspace(draft);
-      savedJson.current = JSON.stringify(draft);
+      const sanitized = withDefaultedLabels(draft);
+      setDraft(sanitized);
+      await api.saveWorkspace(sanitized);
+      savedJson.current = JSON.stringify(sanitized);
       onSaved();
     } catch (err) {
       setActionError(`Save failed: ${String(err)}`);
@@ -139,9 +162,11 @@ export function WorkspaceEditor({
   const handleCreateShortcut = async () => {
     setShortcutMessage(null);
     try {
-      await api.saveWorkspace(draft);
-      savedJson.current = JSON.stringify(draft);
-      const path = await api.createDesktopShortcut(draft.id);
+      const sanitized = withDefaultedLabels(draft);
+      setDraft(sanitized);
+      await api.saveWorkspace(sanitized);
+      savedJson.current = JSON.stringify(sanitized);
+      const path = await api.createDesktopShortcut(sanitized.id);
       setShortcutMessage(`Created: ${path}`);
     } catch (err) {
       setShortcutMessage(`Failed: ${String(err)}`);
@@ -167,6 +192,8 @@ export function WorkspaceEditor({
     }
   };
 
+  const nameIsBlank = draft.name.trim() === "";
+
   return (
     <div className="workspace-editor">
       <div className="field-row">
@@ -177,6 +204,7 @@ export function WorkspaceEditor({
           placeholder="Workspace name"
         />
       </div>
+      {nameIsBlank && <div className="action-warning">⚠ Name is required</div>}
       <textarea
         value={draft.description}
         onChange={(e) => setDraft({ ...draft, description: e.currentTarget.value })}
@@ -298,13 +326,13 @@ export function WorkspaceEditor({
       </section>
 
       <div className="field-row editor-actions">
-        <button type="button" onClick={handleSave} disabled={saving}>
+        <button type="button" onClick={handleSave} disabled={saving || nameIsBlank}>
           {saving ? "Saving…" : "Save"}
         </button>
         <button type="button" onClick={handleLaunch} disabled={launching}>
           {launching ? "Launching…" : "Launch"}
         </button>
-        <button type="button" onClick={handleCreateShortcut}>
+        <button type="button" onClick={handleCreateShortcut} disabled={nameIsBlank}>
           Create desktop shortcut
         </button>
         <button type="button" onClick={onCancel}>
