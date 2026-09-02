@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkspaceEditor } from "./WorkspaceEditor";
 import { newWorkspace } from "../types";
@@ -161,6 +161,93 @@ describe("WorkspaceEditor", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Launch failed: workspace abc123 not found",
     );
+  });
+
+  // Issue #20: Close used to call onCancel unconditionally, so an edit made
+  // but not yet saved was silently discarded with no warning.
+  it("closes immediately when there are no unsaved changes (#20)", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    const workspace = makeWorkspace();
+    mockedApi.getWorkspace.mockResolvedValue(workspace);
+    render(<WorkspaceEditor workspaceId={workspace.id} onSaved={vi.fn()} onCancel={onCancel} />);
+    await screen.findByPlaceholderText("Workspace name");
+
+    await user.click(screen.getByRole("button", { name: /^close$/i }));
+
+    expect(onCancel).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("shows a confirm dialog before discarding unsaved changes, and Cancel keeps editing (#20)", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    const workspace = makeWorkspace({ name: "Original" });
+    mockedApi.getWorkspace.mockResolvedValue(workspace);
+    render(<WorkspaceEditor workspaceId={workspace.id} onSaved={vi.fn()} onCancel={onCancel} />);
+    await screen.findByPlaceholderText("Workspace name");
+
+    await user.type(screen.getByPlaceholderText("Workspace name"), " edited");
+    await user.click(screen.getByRole("button", { name: /^close$/i }));
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent(/unsaved changes/i);
+    expect(onCancel).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /^cancel$/i }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("discards changes and closes when confirmed (#20)", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    const workspace = makeWorkspace({ name: "Original" });
+    mockedApi.getWorkspace.mockResolvedValue(workspace);
+    render(<WorkspaceEditor workspaceId={workspace.id} onSaved={vi.fn()} onCancel={onCancel} />);
+    await screen.findByPlaceholderText("Workspace name");
+
+    await user.type(screen.getByPlaceholderText("Workspace name"), " edited");
+    await user.click(screen.getByRole("button", { name: /^close$/i }));
+    await user.click(await screen.findByRole("button", { name: /discard changes/i }));
+
+    expect(onCancel).toHaveBeenCalled();
+  });
+
+  it("does not prompt when closing a freshly-opened, untouched new workspace (#20)", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    render(<WorkspaceEditor workspaceId={null} onSaved={vi.fn()} onCancel={onCancel} />);
+
+    await user.click(screen.getByRole("button", { name: /^close$/i }));
+
+    expect(onCancel).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("does not prompt right after a successful save (#20)", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    const onSaved = vi.fn();
+    const workspace = makeWorkspace({ name: "Original" });
+    mockedApi.getWorkspace.mockResolvedValue(workspace);
+    // A prior test's mockRejectedValue on saveWorkspace would otherwise
+    // survive resetApiMocks's vi.clearAllMocks(), which clears call history
+    // but not implementations.
+    mockedApi.saveWorkspace.mockResolvedValue(undefined);
+    render(<WorkspaceEditor workspaceId={workspace.id} onSaved={onSaved} onCancel={onCancel} />);
+    await screen.findByPlaceholderText("Workspace name");
+
+    await user.type(screen.getByPlaceholderText("Workspace name"), " edited");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    // handleSave updates the dirty-tracking ref after its internal await, so
+    // wait for the save to fully settle before clicking Close — otherwise
+    // the click can race the save's continuation.
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    await user.click(screen.getByRole("button", { name: /^close$/i }));
+
+    expect(onCancel).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   // Issue #21: neither the workspace name nor an action label had a guard —
