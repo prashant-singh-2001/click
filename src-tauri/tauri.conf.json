@@ -38,6 +38,15 @@
           ]
         }
       }
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/prashant-singh-2001/click/releases/latest/download/latest.json"
+      ],
+      "pubkey": "REPLACE_WITH_GENERATED_PUBLIC_KEY",
+      "windows": {
+        "installMode": "passive"
+      }
     }
   },
   "bundle": {

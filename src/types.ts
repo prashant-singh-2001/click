@@ -119,3 +119,11 @@ export function newUrlAction(): UrlAction {
     delayAfterMs: null,
   };
 }
+
+// Mirrors `updates::UpdateStatus` in Rust — the outcome of an update check
+// (startup, tray, or the diagnostics footer's manual button; issue #25).
+export type UpdateStatus =
+  | { kind: "upToDate"; currentVersion: string }
+  | { kind: "declined"; availableVersion: string }
+  | { kind: "installing"; availableVersion: string }
+  | { kind: "unavailable"; reason: string };

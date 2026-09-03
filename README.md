@@ -9,7 +9,7 @@ Define a *workspace* — a bundle of apps, URLs, and settings — and launch the
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%20v2-24C8DB.svg)](https://tauri.app)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6.svg)](#installation)
-![Version](https://img.shields.io/badge/version-0.1.0-informational.svg)
+![Version](https://img.shields.io/badge/version-0.2.4-informational.svg)
 
 ![Click — workspace list](docs/screenshot.png)
 
@@ -54,6 +54,14 @@ Starting a dev session means opening the same pile of tools every single time: a
 ### Build from source
 
 See [Development](#development).
+
+### Updating
+
+Click checks for updates on startup and shows a native prompt if one is available. You can
+also check manually: **Check for updates** in the tray menu, or in the app's diagnostics
+footer at the bottom of the window. Confirming downloads, installs, and restarts Click;
+declining just dismisses the prompt until the next check. Updates are signed and served from
+this repo's [Releases](../../releases) page (issue #25).
 
 ## Usage
 
@@ -193,7 +201,7 @@ The single most important design decision: **the launch engine lives in Rust, no
 
 **Shipped (v0.1.0):** workspace CRUD · app + URL actions · sequential launch with variables and delays · system tray · global hotkeys · CLI · single-instance · desktop-shortcut generation · Windows installer.
 
-**Planned / deferred:** command & script actions · readiness gates (port/HTTP/process) · parallel launch · skip-if-running · import/export with path remapping · dry-run preview · browser & profile selection · launch history · teardown ("close workspace") · macOS/Linux · code signing & auto-update.
+**Planned / deferred:** command & script actions · readiness gates (port/HTTP/process) · parallel launch · skip-if-running · import/export with path remapping · dry-run preview · browser & profile selection · launch history · teardown ("close workspace") · macOS/Linux · code signing.
 
 See [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) for the full design specification.
 

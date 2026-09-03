@@ -5,6 +5,7 @@ import type {
   HotkeyStatus,
   InstalledApp,
   LaunchReport,
+  UpdateStatus,
   Workspace,
 } from "./types";
 
@@ -36,4 +37,5 @@ export const api = {
     invoke<InstalledApp[]>("list_installed_apps", { refresh }),
   logDir: () => invoke<string>("log_dir"),
   openLogDir: () => invoke<void>("open_log_dir"),
+  checkForUpdates: () => invoke<UpdateStatus>("check_for_updates"),
 };

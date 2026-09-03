@@ -440,6 +440,16 @@ textarea {
   font-size: 0.95em;
 }
 
+.diagnostics-updates {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.diagnostics-update-status {
+  white-space: nowrap;
+}
+
 @media (prefers-color-scheme: dark) {
   .modal {
     background-color: #2f2f2f;
