@@ -34,12 +34,39 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # A repeat of the v0.2.3 slip -- that tag was pushed without bumping
+      # package.json/Cargo.toml/tauri.conf.json, so it shipped 0.2.2's
+      # binaries under a 0.2.3 tag. The updater (issue #25) compares
+      # latest.json's version (taken from tauri.conf.json) against the
+      # running app's version, so a repeat of that mismatch would publish a
+      # release the updater either ignores forever or offers forever.
+      - name: Verify tag matches the configured version
+        shell: pwsh
+        run: |
+          $conf = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $pkg = (Get-Content package.json | ConvertFrom-Json).version
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          if ($conf -ne $tag -or $pkg -ne $tag) {
+            throw "Tag $tag disagrees with tauri.conf.json ($conf) / package.json ($pkg) -- bump all three version files before tagging."
+          }
+
       - name: Build and publish (draft release)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Turns bundle.createUpdaterArtifacts on via the release-only
+          # overlay (tauri.release.conf.json) -- these two are what that
+          # flag needs at build time to sign the update artifacts. They
+          # must NOT be set for any other build (npm run tauri dev/build,
+          # smoke.yml) since createUpdaterArtifacts isn't on there, and
+          # tauri build hard-fails if a pubkey is configured without a
+          # matching private key.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Click ${{ github.ref_name }}"
           releaseDraft: true
           prerelease: false
+          includeUpdaterJson: true
+          args: --config tauri.release.conf.json
