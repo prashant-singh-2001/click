@@ -3,6 +3,7 @@ use crate::installed_apps::{self, InstalledApp};
 use crate::launch::{self, ActionStatus, LaunchReport};
 use crate::model::{Action, Workspace};
 use crate::store;
+use crate::updates::{self, UpdateStatus, UpdateTrigger};
 use crate::AppState;
 use std::fmt;
 use std::path::Path;
@@ -447,6 +448,16 @@ pub fn open_log_dir(app: AppHandle) -> Result<(), String> {
     app.opener()
         .open_path(dir.to_string_lossy().to_string(), None::<&str>)
         .map_err(|e| e.to_string())
+}
+
+/// Manual update check from the editor's diagnostics footer
+/// (`DiagnosticsFooter.tsx`) -- the same `updates::check_and_prompt` the
+/// startup check and the tray's "Check for updates..." item use, so all
+/// three triggers share one code path and only differ by `UpdateTrigger`
+/// (issue #25).
+#[tauri::command]
+pub async fn check_for_updates(app: AppHandle) -> UpdateStatus {
+    updates::check_and_prompt(app, UpdateTrigger::Ui).await
 }
 
 #[cfg(test)]

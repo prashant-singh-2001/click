@@ -6,7 +6,13 @@ use tauri_plugin_cli::{CliExt, Matches};
 /// forwards from a second invocation (`args: Some(argv)`). A `run --id
 /// <uuid>` never shows the main window — that's what makes the
 /// desktop-shortcut flow (FR-4.4) headless.
-pub fn handle(app: &AppHandle, args: Option<Vec<String>>) {
+///
+/// Returns whether this call resulted in a headless launch (`true`) or the
+/// normal interactive path (`false`) — used to gate the startup update
+/// check (issue #25), which must not fire on a shortcut click: the main
+/// window stays hidden on that path, so a dialog would have nowhere to
+/// render, and it's exactly the path `smoke.yml`'s boot test drives.
+pub fn handle(app: &AppHandle, args: Option<Vec<String>>) -> bool {
     let result = match args {
         Some(argv) => app.cli().matches_from(argv),
         None => app.cli().matches(),
@@ -15,14 +21,15 @@ pub fn handle(app: &AppHandle, args: Option<Vec<String>>) {
         Ok(matches) => matches,
         Err(err) => {
             log::warn!("failed to parse CLI arguments: {err}");
-            return;
+            return false;
         }
     };
 
     if try_launch(app, &matches) {
-        return;
+        return true;
     }
     focus_main_window(app);
+    false
 }
 
 fn try_launch(app: &AppHandle, matches: &Matches) -> bool {

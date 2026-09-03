@@ -47,6 +47,13 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         true,
         None::<&str>,
     )?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        "check-updates",
+        "Check for updates...",
+        true,
+        None::<&str>,
+    )?)?;
     menu.append(&MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?)?;
     Ok(menu)
 }
@@ -82,6 +89,12 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
                 let _ = window.show();
                 let _ = window.set_focus();
             }
+        }
+        "check-updates" => {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                crate::updates::check_and_prompt(app, crate::updates::UpdateTrigger::Tray).await;
+            });
         }
         other if other.starts_with("launch:") => {
             let workspace_id = other.trim_start_matches("launch:").to_string();

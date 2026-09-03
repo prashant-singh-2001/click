@@ -8,6 +8,7 @@ mod model;
 mod shortcut;
 mod store;
 mod tray;
+mod updates;
 mod vars;
 
 use model::WorkspaceFile;
@@ -52,6 +53,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_cli::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             log::info!("click v{} starting", env!("CARGO_PKG_VERSION"));
 
@@ -87,7 +89,19 @@ pub fn run() {
             hotkeys::register_all(&app.handle().clone());
             installed_apps::init(app);
             tray::build(app)?;
-            cli::handle(&app.handle().clone(), None);
+            let headless = cli::handle(&app.handle().clone(), None);
+            // A `click run --id <uuid>` desktop-shortcut launch never shows
+            // the main window (see cli::handle), so a dialog would have
+            // nowhere to render -- and this is exactly the path smoke.yml
+            // drives in CI. spawn (not spawn_blocking): the update check is
+            // network-bound, not CPU-bound, and must not sit on the async
+            // runtime's blocking pool (issue #3).
+            if !headless {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    updates::check_and_prompt(handle, updates::UpdateTrigger::Startup).await;
+                });
+            }
 
             Ok(())
         })
@@ -110,6 +124,7 @@ pub fn run() {
             commands::list_installed_apps,
             commands::log_dir,
             commands::open_log_dir,
+            commands::check_for_updates,
         ])
         .on_window_event(|window, event| {
             // Closing the main window hides it into the tray instead of
@@ -207,6 +222,51 @@ mod tests {
         assert!(
             connect_src.contains("http://ipc.localhost"),
             "connect-src must allow Tauri's IPC endpoint or every invoke fails, got: {connect_src}"
+        );
+    }
+
+    /// Pins the updater's release feed (issue #25). `pubkey` is deliberately
+    /// not asserted here -- it's a placeholder in the committed config until
+    /// the real one is generated and pasted in (see docs/RELEASING.md), and
+    /// asserting its exact value would just pin a value that's expected to
+    /// change once, on purpose.
+    #[test]
+    fn updater_config_points_at_this_repos_releases() {
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("tauri.conf.json should parse");
+
+        let endpoints = config["plugins"]["updater"]["endpoints"]
+            .as_array()
+            .expect("plugins.updater.endpoints must be an array");
+        assert!(!endpoints.is_empty(), "updater needs at least one endpoint");
+        assert!(
+            endpoints[0]
+                .as_str()
+                .unwrap()
+                .contains("prashant-singh-2001/click"),
+            "updater endpoint should point at this repo's releases, got: {endpoints:?}"
+        );
+    }
+
+    /// `createUpdaterArtifacts: true` in the base config makes `tauri build`
+    /// hard-fail without `TAURI_SIGNING_PRIVATE_KEY` -- that would break
+    /// smoke.yml's bare `npm run tauri build` and every contributor's local
+    /// build. It belongs only in the release-only overlay (issue #25).
+    #[test]
+    fn updater_artifacts_are_release_only_not_in_the_base_config() {
+        let base: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("tauri.conf.json should parse");
+        assert!(
+            base["bundle"]["createUpdaterArtifacts"].is_null(),
+            "createUpdaterArtifacts must not be in the base config -- it breaks unsigned builds"
+        );
+
+        let release: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.release.conf.json"))
+                .expect("tauri.release.conf.json should parse");
+        assert_eq!(
+            release["bundle"]["createUpdaterArtifacts"], true,
+            "the release overlay must turn on updater artifact generation"
         );
     }
 }
