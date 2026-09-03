@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Click can now check for and install updates itself** (NFR-9). There was no updater at
+  all before this — a new version meant manually re-downloading and reinstalling. Click now
+  checks on startup (silently, unless one is found) and via a manual "Check for updates..."
+  in the tray menu or the diagnostics footer; a native dialog (not in-app UI, since the main
+  window is hidden most of the time) offers to install and restart. Updates are fetched from
+  this repo's GitHub Releases and verified against a signing key baked into the app before
+  installing. This needed real signing/versioning infrastructure that didn't exist yet:
+  `docs/RELEASING.md` (new) documents key generation and the release checklist, and
+  `release.yml` now refuses to tag a release whose version files disagree with the tag --
+  closing the exact gap that shipped `v0.2.3` with `v0.2.2`'s binaries. Existing installs
+  have no updater and can't auto-update to anything; only installs of the first
+  updater-enabled release onward benefit. ([#25])
+
 - **Click now keeps a local log** (NFR-10). Every launch — from the button, the tray, a
   hotkey, or the CLI/desktop-shortcut path — is recorded with which trigger fired it, what
   ran, and any failure; so are config load/save outcomes, hotkey registration results, and
@@ -266,3 +279,4 @@ development environment from a single named workspace.
 [#21]: https://github.com/prashant-singh-2001/click/issues/21
 [#15]: https://github.com/prashant-singh-2001/click/issues/15
 [#20]: https://github.com/prashant-singh-2001/click/issues/20
+[#25]: https://github.com/prashant-singh-2001/click/issues/25

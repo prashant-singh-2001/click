@@ -6,8 +6,8 @@ Click is pre-1.0 and under active development. Only the latest release receives 
 
 | Version | Supported |
 |---|---|
-| 0.1.x | ✅ |
-| < 0.1 | ❌ |
+| 0.2.x | ✅ |
+| < 0.2 | ❌ |
 
 ## Reporting a vulnerability
 
@@ -36,4 +36,15 @@ Consequences to be aware of:
 
 ## Unsigned builds
 
-Release binaries are **not currently code-signed**, so Windows SmartScreen will warn on first run. This is expected for now, but it means you should only run installers you obtained from the official [Releases](../../releases) page. Code signing is on the roadmap.
+Release binaries are **not currently code-signed** (Authenticode), so Windows SmartScreen will warn on first run. This is expected for now, but it means you should only run installers you obtained from the official [Releases](../../releases) page. Code signing (SEC-5) is still on the roadmap.
+
+This is a **separate concern from update signing** below — Authenticode is about trusting where an installer came from; the updater's signature is about trusting that an automatic update wasn't tampered with in transit. Adding the updater does not add Authenticode signing, and vice versa.
+
+## Update signing
+
+Click checks for updates (issue #25) against this repo's GitHub Releases and verifies every downloaded update against a public key baked into the app before installing it. The trust model:
+
+- The **private** signing key lives outside this repository, held by the maintainer, and is stored as GitHub Actions secrets (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) used only by the release workflow. It is never committed and never appears in any build log.
+- The **public** key is committed in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`) and ships inside every build — that's intentional; a public key is not a secret.
+- **If the private key is ever lost**, every existing install's update path is permanently broken — there is no way to sign a new release those installs will trust. Recovery means generating a new keypair, shipping it in a new release, and every user reinstalling manually once (the same manual-reinstall flow this feature exists to remove). There is no rotation mechanism today.
+- Because updates run with your full user privileges the moment you approve them, the private key is exactly as sensitive as commit access to this repository's release workflow — treat a compromise of one as a compromise of both.

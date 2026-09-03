@@ -40,7 +40,7 @@ CI (`.github/workflows/ci.yml`, windows-latest) runs exactly: `npm run lint`, `n
 
 All four "one click" triggers — UI button, tray menu, global hotkey, CLI/shortcut — funnel through `commands::launch_by_id` (`src-tauri/src/commands.rs`), which looks up the workspace and calls `commands::launch_resolved`. The editor's Launch button is a fifth path, `commands::launch_workspace_draft`, which skips the lookup — the frontend hands it the current draft directly rather than an id, so Launch runs exactly what's on screen, saved or not (issue #9). Both paths converge on `launch_resolved`, which calls `launch::launch_workspace`; add a trigger by calling `launch_resolved`, not by reimplementing launch.
 
-Module map (`src-tauri/src/`): `lib.rs` (builder, plugin order, state, close-to-tray) · `model.rs` (serde data model) · `store.rs` (load/save + quarantine) · `vars.rs` (`${VAR}` resolution) · `launch.rs` (the engine) · `logging.rs` (rotating log, panic hook, fatal-startup dialog) · `commands.rs` (the `#[tauri::command]` surface) · `tray.rs` · `hotkeys.rs` · `cli.rs` · `installed_apps.rs` (Start Menu scan for the app picker) · `shortcut.rs` (`.lnk` generation).
+Module map (`src-tauri/src/`): `lib.rs` (builder, plugin order, state, close-to-tray) · `model.rs` (serde data model) · `store.rs` (load/save + quarantine) · `vars.rs` (`${VAR}` resolution) · `launch.rs` (the engine) · `logging.rs` (rotating log, panic hook, fatal-startup dialog) · `commands.rs` (the `#[tauri::command]` surface) · `tray.rs` · `hotkeys.rs` · `cli.rs` · `installed_apps.rs` (Start Menu scan for the app picker) · `shortcut.rs` (`.lnk` generation) · `updates.rs` (updater check/prompt/install, issue #25).
 
 `src/api.ts` is the single typed wrapper around every `invoke`; components never call `invoke` directly.
 
@@ -62,6 +62,7 @@ These encode fixed bugs — breaking one silently regresses real data loss or cr
 - **The webview runs under a strict CSP** (`app.security.csp` in `tauri.conf.json`, issue #18). `connect-src` must keep `http://ipc.localhost` — that is the URL Tauri's IPC `fetch` actually targets on Windows, so dropping it makes every `invoke` fail and bricks the whole UI. **`npm run tauri dev` does not enforce the CSP**: the webview loads `devUrl` (Vite) directly, so Tauri never serves the document and never sets the header. Only a bundled build applies it — a dev-mode pass proves nothing. Anything new that loads a remote resource, adds an inline `<style>`/`<script>`, or uses `convertFileSrc` needs a matching directive.
 - **Nothing above DEBUG may log a resolved argument or working directory** (issue #6). `${VAR}` resolution can pull a secret from the environment, and this project's own `SECURITY.md` warns against plaintext secrets reaching disk. `ResolvedCommand::describe()` (logged at INFO in `launch.rs::execute`) must stay limited to the target path; only `describe_verbose()` (DEBUG, gated behind `CLICK_LOG=debug`) may include `args`/`cwd`. `launch.rs`'s `describe_never_contains_args_or_cwd` test pins this.
 - **The log plugin is registered before `tauri-plugin-single-instance`** in `lib.rs`, not after. `single-instance`'s own setup hook calls `std::process::exit(0)` when it detects a second instance (after forwarding that instance's argv), so any plugin registered later never initializes in that forwarding process — which is exactly the desktop-shortcut / CLI path most in need of a log record. Don't reorder these without re-reading that comment in `lib.rs`.
+- **`bundle.createUpdaterArtifacts` lives only in `src-tauri/tauri.release.conf.json`, never in the base `tauri.conf.json`** (issue #25). Setting it in the base config makes `tauri build` hard-fail without `TAURI_SIGNING_PRIVATE_KEY` set — which would break `smoke.yml`'s bare `npm run tauri build` and every contributor's local build. `plugins.updater.endpoints`/`pubkey` *are* in the base config and stay there safely: a configured pubkey alone doesn't require a private key at build time, only generating signed artifacts does. `release.yml` passes the overlay via `--config tauri.release.conf.json`, and `lib.rs`'s `updater_artifacts_are_release_only_not_in_the_base_config` test pins the split.
 
 ## Frontend tests
 
@@ -73,6 +74,6 @@ Pattern: `vi.mock("../api")` at module top, then `import { mockedApi, resetApiMo
 
 ## Conventions
 
-- Version lives in three places that must stay in sync: `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`.
+- Version lives in three places that must stay in sync: `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` — `release.yml` now checks this at tag time (issue #25); see `docs/RELEASING.md` for the full release checklist.
 - Update `CHANGELOG.md` under `## [Unreleased]` with the issue link (`([#32])`) for user-facing changes.
 - Branch from `main`; imperative commit subjects.
