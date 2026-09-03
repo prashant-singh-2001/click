@@ -18,4 +18,5 @@ export function resetApiMocks() {
   mockedApi.validateAction.mockResolvedValue(null);
   mockedApi.listInstalledApps.mockResolvedValue([]);
   mockedApi.logDir.mockResolvedValue("C:\\logs");
+  mockedApi.checkForUpdates.mockResolvedValue({ kind: "upToDate", currentVersion: "0.0.0" });
 }
